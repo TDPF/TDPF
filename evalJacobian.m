@@ -63,15 +63,11 @@
 %
 % COMMENTS:
 %
-% TO DO:
-%   * Implement the entries of the Jacobian!
-%
-
 function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
     %% Compute required vector/matrix dimensions
     N = length(V);          % Total number of buses
     M = length(sets.V);     % Number of PQ buses
-    L = length(T);          % Total number of branches
+    L = length(branch.id);  % Total number of branches
     R = length(sets.T);     % Number of temperature-dependent branches
 
     %% Compute some necessary quantities for branch elements
@@ -94,6 +90,22 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
         T = T';
     end;
     
+    %% Compute Sparsity Information
+    % It's helpful to precompute some sparsity information about YBus to
+    % make it easier to compute the Jacobian matrices efficiently.
+    
+    % Generates a sparse matrix indicating non-zero elements of Y
+    % (Note that diagonals are considered non-zero even if they happen to
+    % be zero for some odd reason)
+    nzY = (G ~= 0) | (B ~= 0) | speye(N);
+    
+    % Generates a sparse connection matrix mapping from...
+    %   Branch elements by row, that are connected to...
+    %   Bus elements by column
+    % Each row has exactly 2 corresponding nonzero columns.
+    nzL = sparse( [1:L,1:L], [branch.from,branch.to], ones(1,2*L), L, N);
+    
+    
     %% Compute Jacobian submatrices
     % (Each is evaluated only if needed)
     
@@ -112,292 +124,442 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
     
     % J1 = dP/dd    (N-1) x (N-1)
     % Needed for all types
-        J1 = zeros(N-1,N-1);
-        for ii = 1:(N-1)
-            for kk = 1:(N-1)
-                i = sets.P(ii);
-                k = sets.delta(kk);
-                % Same bus
-                if (k == i)
-                    J1(ii,kk) = ...
-                        V(i) * sum( V .* ( ...
-                        -G(i,:) .* sin(delta(i) - delta) ...
-                        +B(i,:) .* cos(delta(i) - delta) ...
-                        )) - V(i)^2 * B(i,i);
-                % Different buses
-                else
-                    J1(ii,kk) = ...
-                        V(i)*V(k)*( ...
-                        G(i,k)*sin(delta(i)-delta(k)) - ...
-                        B(i,k)*cos(delta(i)-delta(k)) );
-                end
+        % Find indices of all nonzero YBus elements + diagonals where:
+        %   The row    exists in sets.P
+        %   The column exists in sets.delta
+        [jRow, jCol]  = find( nzY( sets.P, sets.delta ) );
+        
+        % NOTE: The indexing is now relative to J1 rather than YBus. This
+        % is important when translating back to V and delta values!
+        
+        % Storage for J1 elements
+        jElem = zeros( size(jRow) );
+        
+        % Generate each nonzero element of J1
+        for count = 1:length(jRow)
+            % Find indices with respect to J1
+            ii = jRow(count);
+            kk = jCol(count);
+            
+            % Find indices with respect to YBus
+            i = sets.P(ii);
+            k = sets.delta(kk);            
+
+            % Same bus
+            if (k == i)
+                jElem(count) = ...
+                    V(i) * sum( V .* ( ...
+                    -G(i,:) .* sin(delta(i) - delta) ...
+                    +B(i,:) .* cos(delta(i) - delta) ...
+                    )) - V(i)^2 * B(i,i);
+            % Different buses
+            else
+                jElem(count) = ...
+                    V(i)*V(k)*( ...
+                    G(i,k)*sin(delta(i)-delta(k)) - ...
+                    B(i,k)*cos(delta(i)-delta(k)) );
             end
         end
         
+        % Generate J1
+        J1 = sparse(jRow, jCol, jElem, N-1, N-1);
+    
+    
     % J2 = dP/dV    (N-1) x (M)
     if any( type == [1 2 4] )
-        J2 = zeros(N-1,M);
-        for ii = 1:(N-1)
-            for kk = 1:M
-                i = sets.P(ii);
-                k = sets.V(kk);
-                % Same bus
-                if (k == i)
-                    J2(ii,kk) = V(i) * G(i,i) + ...
-                        sum( V .* ( ...
-                        G(i,:) .* cos(delta(i) - delta) + ...
-                        B(i,:) .* sin(delta(i) - delta) ...
-                        ));
-                % Different buses
-                else
-                    J2(ii,kk) = V(i) * ( ...
-                        G(i,k) * cos(delta(i) - delta(k)) + ...
-                        B(i,k) * sin(delta(i) - delta(k)) );
-                end
+        % Find indices of all nonzero YBus elements + diagonals where:
+        %   The row    exists in sets.P
+        %   The column exists in sets.V
+        [jRow, jCol]  = find( nzY( sets.P, sets.V ) );
+        
+        % NOTE: The indexing is now relative to J2 rather than YBus. This
+        % is important when translating back to V and delta values!
+        
+        % Storage for J2 elements
+        jElem = zeros( size(jRow) );
+        
+        % Generate each nonzero element of J2
+        for count = 1:length(jRow)
+            % Find indices with respect to J2
+            ii = jRow(count);
+            kk = jCol(count);
+            
+            % Find indices with respect to YBus
+            i = sets.P(ii);
+            k = sets.V(kk);            
+
+            % Same bus
+            if (k == i)
+                jElem(count) = V(i) * G(i,i) + ...
+                    sum( V .* ( ...
+                    G(i,:) .* cos(delta(i) - delta) + ...
+                    B(i,:) .* sin(delta(i) - delta) ...
+                    ));
+            % Different buses
+            else
+                jElem(count) = V(i) * ( ...
+                    G(i,k) * cos(delta(i) - delta(k)) + ...
+                    B(i,k) * sin(delta(i) - delta(k)) );
             end
         end
-    end
         
+        % Generate J1
+        J2 = sparse(jRow, jCol, jElem, N-1, M);
+    end
+    
+    
     % J3 = dQ/dd    (M) x (N-1)
     if any( type == [1 2 4] )
-        J3 = zeros(M,N-1);
-        for ii = 1:M
-            for kk = 1:(N-1)
-                i = sets.Q(ii);
-                k = sets.delta(kk);
-                % Same bus
-                if (k == i)
-                    J3(ii,kk) = ...
-                        V(i) * sum( V .* ( ...
-                        G(i,:) .* cos(delta(i) - delta) + ...
-                        B(i,:) .* sin(delta(i) - delta) ...
-                        )) - V(i)^2 * G(i,i);
-                % Different buses
-                else
-                    J3(ii,kk) = ...
-                        V(i)*V(k)*( ...
-                        -G(i,k)*cos(delta(i)-delta(k)) - ...
-                        B(i,k)*sin(delta(i)-delta(k)) );
-                end
+        % Find indices of all nonzero YBus elements + diagonals where:
+        %   The row    exists in sets.Q
+        %   The column exists in sets.delta
+        [jRow, jCol]  = find( nzY( sets.Q, sets.delta ) );
+        
+        % NOTE: The indexing is now relative to J3 rather than YBus. This
+        % is important when translating back to V and delta values!
+        
+        % Storage for J3 elements
+        jElem = zeros( size(jRow) );
+        
+        % Generate each nonzero element of J3
+        for count = 1:length(jRow)
+            % Find indices with respect to J3
+            ii = jRow(count);
+            kk = jCol(count);
+            
+            % Find indices with respect to YBus
+            i = sets.Q(ii);
+            k = sets.delta(kk);            
+
+            % Same bus
+            if (k == i)
+                jElem(count) = ...
+                    V(i) * sum( V .* ( ...
+                    G(i,:) .* cos(delta(i) - delta) + ...
+                    B(i,:) .* sin(delta(i) - delta) ...
+                    )) - V(i)^2 * G(i,i);
+            % Different buses
+            else
+                jElem(count) = ...
+                    V(i)*V(k)*( ...
+                    -G(i,k)*cos(delta(i)-delta(k)) - ...
+                    B(i,k)*sin(delta(i)-delta(k)) );
             end
         end
+        
+        % Generate J3
+        J3 = sparse(jRow, jCol, jElem, M, N-1);
     end
+    
     
     % J4 = dQ/dV	(M) x (M)
     % Needed for all types
-        J4 = zeros(M,M);
-        for ii = 1:M
-            for kk = 1:M
-                i = sets.Q(ii);
-                k = sets.V(kk);
-                % Same bus
-                if (k == i)
-                    J4(ii,kk) = -V(i) * B(i,i) + ...
-                        sum( V .* ( ...
-                        G(i,:) .* sin(delta(i) - delta) - ...
-                        B(i,:) .* cos(delta(i) - delta) ...
-                        ));
-                % Different buses
-                else
-                    J4(ii,kk) = V(i) * ( ...
-                        G(i,k) * sin(delta(i) - delta(k)) - ...
-                        B(i,k) * cos(delta(i) - delta(k)) );
-                end
+        % Find indices of all nonzero YBus elements + diagonals where:
+        %   The row    exists in sets.Q
+        %   The column exists in sets.V
+        [jRow, jCol]  = find( nzY( sets.Q, sets.V ) );
+        
+        % NOTE: The indexing is now relative to J4 rather than YBus. This
+        % is important when translating back to V and delta values!
+        
+        % Storage for J4 elements
+        jElem = zeros( size(jRow) );
+        
+        % Generate each nonzero element of J4
+        for count = 1:length(jRow)
+            % Find indices with respect to J4
+            ii = jRow(count);
+            kk = jCol(count);
+            
+            % Find indices with respect to YBus
+            i = sets.Q(ii);
+            k = sets.V(kk);            
+
+            % Same bus
+            if (k == i)
+                jElem(count) = -V(i) * B(i,i) + ...
+                    sum( V .* ( ...
+                    G(i,:) .* sin(delta(i) - delta) - ...
+                    B(i,:) .* cos(delta(i) - delta) ...
+                    ));
+            % Different buses
+            else
+                jElem(count) = V(i) * ( ...
+                    G(i,k) * sin(delta(i) - delta(k)) - ...
+                    B(i,k) * cos(delta(i) - delta(k)) );
             end
         end
+        
+        % Generate J4
+        J4 = sparse(jRow, jCol, jElem, M, M);
+    
     
     % J5 = dH/dd    (R) x (N-1)
     if type == 1
-        J5 = zeros(R,N-1);
-        for ii = 1:R
-            for kk = 1:(N-1)
-                % Indices
-                ij = sets.H(ii);
-                i = branch.from(ij);
-                j = branch.to(ij);
-                k = sets.delta(kk);
-                        
-                % Voltage magnitudes and angles
-                % 'from' bus must be modified by tap ratio.
-                Vi = V(i) / abs(branch.tap(ij));
-                deltai = delta(i) - angle(branch.tap(ij));
+        % Find indices of all nonzero branch-to-bus connections where
+        %   The row    exists in sets.H
+        %   The column exists in sets.delta
+        [jRow, jCol]  = find( nzL( sets.H, sets.delta ) );
+        
+        % NOTE: The indexing is now relative to J5.
+        
+        % Storage for J5 elements
+        jElem = zeros( size(jRow) );
+        
+        % Generate each nonzero element of J5
+        for count = 1:length(jRow)
+            % Find indices with respect to J5
+            ii = jRow(count);       % Branch-related
+            kk = jCol(count);       % Bus-related
+            
+            % Find indices with respect to YBus and branch
+            ij = sets.H(ii);        % Branch id
+            i = branch.from(ij);    % From bus
+            j = branch.to(ij);      % To bus
+            k = sets.delta(kk);     % Bus corresponding to 'delta'
+            
+            % Voltage magnitudes and angles
+            % 'from' bus must be modified by tap ratio.
+            Vi = V(i) / abs(branch.tap(ij));
+            deltai = delta(i) - angle(branch.tap(ij));
 
-                % 'to' bus is used directly
-                Vj = V(j);
-                deltaj = delta(j);
-                
-                if (k == i)
-                    J5(ii,kk) = -2 * branch.R_therm(ij) * ...
-                                branch.g(ij) * ...
-                                Vi * Vj * sin(deltai - deltaj);
-                elseif (k == j)
-                    J5(ii,kk) = 2 * branch.R_therm(ij) * ...
-                                branch.g(ij) * ...
-                                Vi * Vj * sin(deltai - deltaj);
-                else
-                    J5(ii,kk) = 0;
-                end
+            % 'to' bus is used directly
+            Vj = V(j);
+            deltaj = delta(j);
+
+            % Calculate result
+            if (k == i)
+                jElem(count) = -2 * branch.R_therm(ij) * ...
+                               branch.g(ij) * ...
+                               Vi * Vj * sin(deltai - deltaj);
+            elseif (k == j)
+                jElem(count) = 2 * branch.R_therm(ij) * ...
+                               branch.g(ij) * ...
+                               Vi * Vj * sin(deltai - deltaj);
+            else % This shouldn't ever happen!
+                warning(['Indexing error in calculation of dH/ddelta! ' ...
+                         'Resulting Jacobian matrix may have errors.']);
             end
         end
+        
+        % Generate J5
+        J5 = sparse(jRow, jCol, jElem, R, N-1);
     end
+    
     
     % J6 = dH/dV    (R) x (M)
     if type == 1
-        J6 = zeros(R,M);
-        for ii = 1:R
-            for kk = 1:M
-                % Indices
-                ij = sets.H(ii);
-                i = branch.from(ij);
-                j = branch.to(ij);
-                k = sets.V(kk);
-                
-                % Voltage magnitudes and angles
-                % 'from' bus must be modified by tap ratio.
-                Vi = V(i) / abs(branch.tap(ij));
-                deltai = delta(i) - angle(branch.tap(ij));
+        % Find indices of all nonzero branch-to-bus connections where
+        %   The row    exists in sets.H
+        %   The column exists in sets.V
+        [jRow, jCol]  = find( nzL( sets.H, sets.V ) );
+        
+        % NOTE: The indexing is now relative to J6.
+        
+        % Storage for J6 elements
+        jElem = zeros( size(jRow) );
+        
+        % Generate each nonzero element of J6
+        for count = 1:length(jRow)
+            % Find indices with respect to J6
+            ii = jRow(count);       % Branch-related
+            kk = jCol(count);       % Bus-related
+            
+            % Find indices with respect to YBus and branch
+            ij = sets.H(ii);        % Branch id
+            i = branch.from(ij);    % From bus
+            j = branch.to(ij);      % To bus
+            k = sets.V(kk);         % Bus corresponding to 'V'
+            
+            % Voltage magnitudes and angles
+            % 'from' bus must be modified by tap ratio.
+            Vi = V(i) / abs(branch.tap(ij));
+            deltai = delta(i) - angle(branch.tap(ij));
 
-                % 'to' bus is used directly
-                Vj = V(j);
-                deltaj = delta(j);
-                
-                if (k == i)
-                    J6(ii,kk) = -2 * branch.R_therm(ij) * ...
+            % 'to' bus is used directly
+            Vj = V(j);
+            deltaj = delta(j);
+
+            % Calculate result
+            if (k == i)
+                jElem(count) = -2 * branch.R_therm(ij) * ...
                                 branch.g(ij) * ...
                                 ( Vi - Vj * cos(deltai - deltaj) );
-                elseif (k == j)
-                    J6(ii,kk) = -2 * branch.R_therm(ij) * ...
+            elseif (k == j)
+                jElem(count) = -2 * branch.R_therm(ij) * ...
                                 branch.g(ij) * ...
                                 ( Vj - Vi * cos(deltai - deltaj) );
-                else
-                    J6(ii,kk) = 0;
-                end
+            else % This shouldn't ever happen!
+                warning(['Indexing error in calculation of dH/dV! ' ...
+                         'Resulting Jacobian matrix may have errors.']);
             end
         end
+        
+        % Generate J6
+        J6 = sparse(jRow, jCol, jElem, R, M);
     end
     
     % J7 = dP/dT    (N-1) x (R)
     if type == 1
-        J7 = zeros(N-1,R);
-        for ii = 1:(N-1)
-            for kk = 1:R
-                % Indices
-                i = sets.P(ii);
-                kn = sets.T(kk);
-                k = branch.from(kn);
-                n = branch.to(kn);
-                
-                if (k == i || n == i)
-                    % Compute dg/dT, db/dT
-                    dgdT = ( branch.X(kn)^2 - branch.R(kn)^2 ) / ...
-                           ( branch.R(kn)^2 + branch.X(kn)^2 )^2 * ...
-                             branch.R_ref(kn) / ...
-                           ( branch.T_ref(kn) + branch.T_f(kn) );
-                    dbdT = ( 2 * branch.X(kn) * branch.R(kn) ) / ...
-                           ( branch.R(kn)^2 + branch.X(kn)^2 )^2 * ...
-                             branch.R_ref(kn) / ...
-                           ( branch.T_ref(kn) + branch.T_f(kn) );
-                end
-                if (k == i)
-                    % Voltage magnitudes and angles
-                    % 'from' bus must be modified by tap ratio.
-                    Vi = V(i) / abs(branch.tap(kn));
-                    deltai = delta(i) - angle(branch.tap(kn));
+        % Find indices of all nonzero bus-to-branch connections where
+        %   The row    exists in sets.P
+        %   The column exists in sets.T
+        % Note that this requires using the transpose of nzL
+        [jRow, jCol]  = find( nzL( sets.T, sets.P )' );
+        
+        % NOTE: The indexing is now relative to J7.
+        
+        % Storage for J7 elements
+        jElem = zeros( size(jRow) );
+        
+        % Generate each nonzero element of J7
+        for count = 1:length(jRow)
+            % Find indices with respect to J7
+            ii = jRow(count);       % Bus-related
+            kk = jCol(count);       % Branch-related
+            
+            % Find indices with respect to YBus and branch
+            i = sets.P(ii);         % Bus id for 'P'
+            kn = sets.T(kk);        % Branch id
+            k = branch.from(kn);    % 'from' bus for branch
+            n = branch.to(kn);      % 'to' bus for branch
+            
+            % Compute dg/dT, db/dT for this branch
+            dgdT = ( branch.X(kn)^2 - branch.R(kn)^2 ) / ...
+                   ( branch.R(kn)^2 + branch.X(kn)^2 )^2 * ...
+                     branch.R_ref(kn) / ...
+                   ( branch.T_ref(kn) + branch.T_f(kn) );
+            dbdT = ( 2 * branch.X(kn) * branch.R(kn) ) / ...
+                   ( branch.R(kn)^2 + branch.X(kn)^2 )^2 * ...
+                     branch.R_ref(kn) / ...
+                   ( branch.T_ref(kn) + branch.T_f(kn) );
+            
+            % Calculate result
+            if (k == i)
+                % Voltage magnitudes and angles
+                % 'from' bus must be modified by tap ratio.
+                Vi = V(i) / abs(branch.tap(kn));
+                deltai = delta(i) - angle(branch.tap(kn));
 
-                    % 'to' bus is used directly
-                    Vn = V(n);
-                    deltan = delta(n);
-                    
-                    % Compute dP/dT
-                    J7(ii,kk) = ( Vi^2 - Vi * Vn * ...
-                                  cos(deltai - deltan) ) * dgdT - ...
-                                Vi * Vn * ...
-                                  sin(deltai - deltan) * dbdT;
-                elseif (n == i)
-                    % Voltage magnitudes and angles
-                    % 'from' bus must be modified by tap ratio.
-                    Vk = V(k) / abs(branch.tap(kn));
-                    deltak = delta(k) - angle(branch.tap(kn));
+                % 'to' bus is used directly
+                Vn = V(n);
+                deltan = delta(n);
 
-                    % 'to' bus is used directly
-                    Vi = V(i);
-                    deltai = delta(i);
-                    
-                    % Compute dP/dT
-                    J7(ii,kk) = ( Vi^2 - Vi * Vk * ...
-                                  cos(deltai - deltak) ) * dgdT - ...
-                                Vi * Vk * ...
-                                  sin(deltai - deltak) * dbdT;
-                else
-                	J7(ii,kk) = 0;
-                end
+                % Compute dP/dT
+                jElem(count) = ( Vi^2 - Vi * Vn * ...
+                                 cos(deltai - deltan) ) * dgdT - ...
+                               Vi * Vn * ...
+                                 sin(deltai - deltan) * dbdT;
+            elseif (n == i)
+                % Voltage magnitudes and angles
+                % 'from' bus must be modified by tap ratio.
+                Vk = V(k) / abs(branch.tap(kn));
+                deltak = delta(k) - angle(branch.tap(kn));
+
+                % 'to' bus is used directly
+                Vi = V(i);
+                deltai = delta(i);
+
+                % Compute dP/dT
+                jElem(count) = ( Vi^2 - Vi * Vk * ...
+                                 cos(deltai - deltak) ) * dgdT - ...
+                               Vi * Vk * ...
+                                 sin(deltai - deltak) * dbdT;
+            else % This shouldn't ever happen!
+                warning(['Indexing error in calculation of dP/dT! ' ...
+                         'Resulting Jacobian matrix may have errors.']);
             end
         end
+        
+        % Generate J7
+        J7 = sparse(jRow, jCol, jElem, N-1, R);
     end
     
     % J8 = dQ/dT    (M) x (R)
     if type == 1
-        J8 = zeros(M,R);
-        for ii = 1:M
-            for kk = 1:R
-                % Indices
-                i = sets.Q(ii);
-                kn = sets.T(kk);
-                k = branch.from(kn);
-                n = branch.to(kn);
-                
-                if (k == i || n == i)
-                    % Compute dg/dT, db/dT
-                    dgdT = ( branch.X(kn)^2 - branch.R(kn)^2 ) / ...
-                           ( branch.R(kn)^2 + branch.X(kn)^2 )^2 * ...
-                             branch.R_ref(kn) / ...
-                           ( branch.T_ref(kn) + branch.T_f(kn) );
-                    dbdT = ( 2 * branch.X(kn) * branch.R(kn) ) / ...
-                           ( branch.R(kn)^2 + branch.X(kn)^2 )^2 * ...
-                             branch.R_ref(kn) / ...
-                           ( branch.T_ref(kn) + branch.T_f(kn) );
-                end
-                if (k == i)
-                    % Voltage magnitudes and angles
-                    % 'from' bus must be modified by tap ratio.
-                    Vi = V(i) / abs(branch.tap(kn));
-                    deltai = delta(i) - angle(branch.tap(kn));
+        % Find indices of all nonzero bus-to-branch connections where
+        %   The row    exists in sets.Q
+        %   The column exists in sets.T
+        % Note that this requires using the transpose of nzL
+        [jRow, jCol]  = find( nzL( sets.T, sets.Q )' );
+        
+        % NOTE: The indexing is now relative to J8.
+        
+        % Storage for J8 elements
+        jElem = zeros( size(jRow) );
+        
+        % Generate each nonzero element of J8
+        for count = 1:length(jRow)
+            % Find indices with respect to J8
+            ii = jRow(count);       % Bus-related
+            kk = jCol(count);       % Branch-related
+            
+            % Find indices with respect to YBus and branch
+            i = sets.Q(ii);         % Bus id for 'Q'
+            kn = sets.T(kk);        % Branch id
+            k = branch.from(kn);    % 'from' bus for branch
+            n = branch.to(kn);      % 'to' bus for branch
+            
+            % Compute dg/dT, db/dT for this branch
+            dgdT = ( branch.X(kn)^2 - branch.R(kn)^2 ) / ...
+                   ( branch.R(kn)^2 + branch.X(kn)^2 )^2 * ...
+                     branch.R_ref(kn) / ...
+                   ( branch.T_ref(kn) + branch.T_f(kn) );
+            dbdT = ( 2 * branch.X(kn) * branch.R(kn) ) / ...
+                   ( branch.R(kn)^2 + branch.X(kn)^2 )^2 * ...
+                     branch.R_ref(kn) / ...
+                   ( branch.T_ref(kn) + branch.T_f(kn) );
+            
+            % Calculate result
+            if (k == i)
+                % Voltage magnitudes and angles
+                % 'from' bus must be modified by tap ratio.
+                Vi = V(i) / abs(branch.tap(kn));
+                deltai = delta(i) - angle(branch.tap(kn));
 
-                    % 'to' bus is used directly
-                    Vn = V(n);
-                    deltan = delta(n);
-                    
-                    % Compute dQ/dT
-                    J8(ii,kk) = -Vi * Vn * ...
-                                  sin(deltai - deltan) * dgdT + ...
-                                ( -Vi^2 + Vi * Vn * ...
-                                  cos(deltai - deltan) ) * dbdT;
-                elseif (n == i)
-                    % Voltage magnitudes and angles
-                    % 'from' bus must be modified by tap ratio.
-                    Vk = V(k) / abs(branch.tap(kn));
-                    deltak = delta(k) - angle(branch.tap(kn));
+                % 'to' bus is used directly
+                Vn = V(n);
+                deltan = delta(n);
 
-                    % 'to' bus is used directly
-                    Vi = V(i);
-                    deltai = delta(i);
-                    
-                    % Compute dQ/dT
-                    J8(ii,kk) = -Vi * Vk * ...
-                                  sin(deltai - deltak) * dgdT + ...
-                                ( -Vi^2 + Vi * Vk * ...
-                                  cos(deltai - deltak) ) * dbdT;
-                else
-                	J8(ii,kk) = 0;
-                end
+                % Compute dQ/dT
+                jElem(count) = -Vi * Vn * ...
+                                 sin(deltai - deltan) * dgdT + ...
+                               ( -Vi^2 + Vi * Vn * ...
+                                 cos(deltai - deltan) ) * dbdT;
+            elseif (n == i)
+                % Voltage magnitudes and angles
+                % 'from' bus must be modified by tap ratio.
+                Vk = V(k) / abs(branch.tap(kn));
+                deltak = delta(k) - angle(branch.tap(kn));
+
+                % 'to' bus is used directly
+                Vi = V(i);
+                deltai = delta(i);
+
+                % Compute dQ/dT
+                jElem(count) = -Vi * Vk * ...
+                                 sin(deltai - deltak) * dgdT + ...
+                               ( -Vi^2 + Vi * Vk * ...
+                                 cos(deltai - deltak) ) * dbdT;
+            else % This shouldn't ever happen!
+                warning(['Indexing error in calculation of dQ/dT! ' ...
+                         'Resulting Jacobian matrix may have errors.']);
             end
         end
+        
+        % Generate J8
+        J8 = sparse(jRow, jCol, jElem, M, R);
     end
+    
     
     % J9 = dH/dT    (R) x (R)
     if any( type == [1 2] )
-        J9 = zeros(R,R);
-        % J9 has only diagonal entries
+        % Row, column, and element vectors for J9
+        % NOTE: J9 has only diagonal entries
+        jRow = 1:R; jCol = 1:R;
+        jElem = zeros( size(jRow) );
+        
+        % Generate elements of J9
         for kk = 1:R
             % Indices
             kn = sets.T(kk);
@@ -420,13 +582,16 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
                    ( branch.T_ref(kn) + branch.T_f(kn) );
             
             % Compute dH/dT
-        	J9(kk,kk) = 1 - branch.R_therm(kn) * ...
+        	jElem(kk) = 1 - branch.R_therm(kn) * ...
                         ( Vk^2 + Vn^2 - ...
                           2 * Vk * Vn * cos(deltak - deltan) ) * dgdT;
         end
+        
+        % Generate J9
+        J9 = sparse(jRow, jCol, jElem, R, R);
     elseif type == 3
         % For FD-TDPF, J9 is approximated by the identity matrix
-        J9 = eye(R);
+        J9 = speye(R);
     end
         
     %% Return Type-Dependent Output
