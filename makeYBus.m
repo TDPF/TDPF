@@ -58,54 +58,39 @@ function [Y,G,B,YMag,YAng] = makeYBus(bus,branch)
     for kk = diagIdx
         % Get bus IDs
         k = bus.id(kk);
-        
-        % Find all branches with 'to' terminations at bus k
-        tt = branch.id( branch.to == k );
 
         % Find all branches with 'from' terminations at bus k
         ff = branch.id( branch.from == k);
-
+        
+        % Find all branches with 'to' terminations at bus k
+        tt = branch.id( branch.to == k );
+        
         % Compute Y(k,k)
         ytt = branch.y(tt) + 1j .* branch.B(tt) ./ 2;
         yff = (branch.y(ff) + 1j .* branch.B(ff) ./ 2 ) ...
               ./ (branch.tap(ff) .* conj(branch.tap(ff)));
         diagElem(kk) = sum( ytt ) + sum( yff ) + ...
-                       bus.G(kk) + 1j * bus.B(kk);
+                       bus.G(kk) + 1j * bus.B(kk);  % Shunt admittance
     end
     
     % Compute off-diagonal elements
     % (Only need to compute these at nonzero locations in YBus)
-    rowIdx = [branch.from, branch.to];
-    colIdx = [branch.to, branch.from];
-    offdiagElem = zeros(1,2*L);
+    offdiagRow = [branch.from, branch.to];
+    offdiagCol = [branch.to, branch.from];
     
-    % NOTE: k = 'from' bus, n = 'to' bus
+    % k = 'from' bus, n = 'to' bus
+    % 'from' - 'to' -> If [k] = ... + yft [k,n] * Vt [n]
+    yft = -branch.y ./ conj(branch.tap);
     
-    % First, compute (row k, col n) entry 
-    %   If [k] = ... + yft [k,n] * Vt [n]
-    offdiagElem(1:L) = -branch.y ./ conj(branch.tap);
+    % 'to' - 'from' -> It [n] = ... + ytf [n,k] * Vf [k]
+    ytf = -branch.y ./ branch.tap;
     
-    % Next, compute (row n, col k) entry
-    %   It [n] = ... + ytf [n,k] * Vf [k]
-    offdiagElem((1:L)+L) = -branch.y ./ branch.tap;
+    % Assemble off-diagonal elements
+    offdiagElem = [yft, ytf];
     
     % Construct YBus
-    Y = sparse([diagIdx, rowIdx], [diagIdx, colIdx], ...
+    Y = sparse([diagIdx, offdiagRow], [diagIdx, offdiagCol], ...
                [diagElem, offdiagElem],N,N);
-        
-        
-        % Off-diagonal elements
-%         else
-%             % Find all branchs from k to n (i.e. kn = ft)
-%             ft = branch.id( (branch.from == k) & (branch.to == n) );
-% 
-%             % Find all branchs from n to k (i.e. kn = tf)
-%             tf = branch.id( (branch.to == k) & (branch.from == n) );
-% 
-%             % Compute Y(k,n)
-%             Y(kk,nn) = sum( -branch.y(ft) ./ conj(branch.tap(ft)) ) ...
-%                      + sum( -branch.y(tf) ./ branch.tap(tf) );
-%         end
     
     % Compute Real/Imaginary parts, Magnitude, Angle
     G = real(Y);
