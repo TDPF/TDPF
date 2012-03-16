@@ -49,7 +49,7 @@
 %                               initialized using the temperature values 
 %                               in this vector.
 %   'tol', [val]        Specify mismatch tolerance, in per-unit.
-%                       Default = 1e-06
+%                       Default = 1e-08
 %   'maxIter', [val]    Specify maximum number of outer iterations.
 %                       Default = 10
 %   'maxSubIter', [val] Specify maximum number of sub-iterations, or inner
@@ -96,7 +96,7 @@
 function [V,delta,T,bus,branch,hist] = SD_TDPF(bus,branch,varargin)
     %%Setup	
     % Default control parameters
-	tol = 1e-06;		% PQH mismatch tolerance
+	tol = 1e-08;		% PQH mismatch tolerance
 	maxIter = 10;		% Maximum number of outer iterations
     maxSubIter = 10;    % Maximum number of sub-iterations
 	verbose = false;	% Set to TRUE to spit out a bunch of diagnostics

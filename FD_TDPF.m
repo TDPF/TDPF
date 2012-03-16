@@ -51,7 +51,7 @@
 %                               initialized using the temperature values 
 %                               in this vector.
 %   'tol', [val]        Specify mismatch tolerance, in per-unit.
-%                       Default = 1e-06
+%                       Default = 1e-08
 %   'maxIter', [val]    Specify maximum number of iterations. Default = 100
 %   'verbose', [val]    Enable verbose mode (lots of reporting)? TRUE/FALSE
 %                       Default = FALSE
@@ -94,7 +94,7 @@
 function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
     %%Setup	
     % Default control parameters
-	tol = 1e-06;		% PQH mismatch tolerance
+	tol = 1e-08;		% PQH mismatch tolerance
 	maxIter = 100;		% Maximum number of iterations
 	verbose = false;	% Set to TRUE to spit out a bunch of diagnostics
     history = false;    % Set to TRUE to save and return iteration history
