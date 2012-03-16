@@ -410,8 +410,8 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
 	delta = delta * 180 / pi;
     
     % Store final results back to 'bus' and 'branch'
-    bus.V_mag = V;
-    bus.V_angle = delta;
+    bus.V_mag = V';
+    bus.V_angle = delta';
     branch.T = T';
     
     % Compute maximum error at each iteration and store to history

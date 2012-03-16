@@ -219,6 +219,15 @@ function br = makeBranchStruct(filename,varargin)
     
     % Compute thermal resistance
     br.R_therm = br.T_rrise ./ br.P_rloss;
+    
+    % Flip any column vectors to rows...
+    name = fieldnames(br);
+    for i = 1:length(name)
+        [m,n] = size( br.(name{i}) );
+        if m > n
+            br.(name{i}) = br.(name{i}).';
+        end
+    end
 end
 
     

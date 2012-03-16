@@ -123,4 +123,13 @@ function [bu,N,PV,PQ,Slack] = makeBusStruct(filename,varargin)
     PQ = sort(bu.id(bu.type == 0 | bu.type == 1));
     PV = sort(bu.id( bu.type == 2));
     Slack = sort(bu.id( bu.type == 3));
+    
+    % Flip any column vectors to rows...
+    name = fieldnames(bu);
+    for i = 1:length(name)
+        [m,n] = size( bu.(name{i}) );
+        if m > n
+            bu.(name{i}) = bu.(name{i}).';
+        end
+    end
 end
