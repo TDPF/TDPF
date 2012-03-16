@@ -153,7 +153,7 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
 		varargin(1:2) = [];
 	end
     
-    % Storage structure for history (unuused if 'history' == FALSE)
+    % Storage structure for history (unused if 'history' == FALSE)
     hist = struct;
     
     %% Determine appropriate variable and mismatch sets
@@ -228,13 +228,13 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
     % Ensure column vectors
     if (size(V,2) > size(V,1))              % If # columns > # rows
         V = V';
-    end;
+    end
     if (size(delta,2) > size(delta,1))      % If # columns > # rows
         delta = delta';
-    end;
+    end
     if (size(T,2) > size(T,1))              % If # columns > # rows
         T = T';
-    end;
+    end
     
     % Calculate branch resistances and conductances according to starting
     % temperatures

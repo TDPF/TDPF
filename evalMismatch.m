@@ -46,7 +46,6 @@
 %
 % COMMENTS:
 %
-%
 function mm = evalMismatch(sets,V,delta,T,Y,bus,branch)
     %% Compute required vector/matrix dimensions
     N = length(V);          % Total number of buses

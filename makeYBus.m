@@ -20,10 +20,6 @@
 % COMMENTS:
 %   1. Note that 'YAng' is in radians, not degrees.
 %
-% TO DO:
-%   1. Implement off-nominal turns ratios
-%
-
 function [Y,G,B,YMag,YAng] = makeYBus(bus,branch)
 	% Get YBus dimensions
 	N = length(bus.id);         % Number of buses
@@ -44,10 +40,10 @@ function [Y,G,B,YMag,YAng] = makeYBus(bus,branch)
     %	\ It /   \ C  D /   \ Vt /   \ ytf  ytt /   \ Vt /
     %
     % Which are given by:
-    %   A = yff = (y + b/2) / (aa*) = ytt / (aa*)
+    %   A = yff = (y + jb/2) / (aa*) = ytt / (aa*)
     %   B = yft = -y / a*
     %   C = ytf = -y / a
-    %   D = ytt + b/2
+    %   D = ytt + jb/2
     % 
     % Therefore, for I = YBus * V to work...
     %   YBus(k,k) = sum( ytt for k == t ) + sum( yff for k == f )
