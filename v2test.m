@@ -272,8 +272,8 @@ branch = makeBranchStruct('IEEE_30_BRANCH.csv','TBase',100);
 
 %% IEEE 30 Bus System Test -- Conventional PF
 % Same kind of test but with published IEEE 30 bus test case
-br2 = branch; br2.type = false;
-[V,delta] = FC_TDPF(bus,br2);
+branch1 = branch; branch1.type = false;
+[V,delta,~,bu2,br2,hist] = FC_TDPF(bus,branch1,'history',true);
 
 % Check deviations from published values
 norm(bus.V_mag' - V,inf)
@@ -283,6 +283,43 @@ norm(bus.V_angle' - delta,inf)
 plot(bus.id, bus.V_mag' - V)
 plot(bus.id, bus.V_angle' - delta)
 
+% TO DO: Investigate these errors. what happened???
+% Things I've checked:
+% 1. My sparsity changes to the Jacobian matrix have no effect on this
+%    error.
+
+% 2. No weird errors where V and delta aren't matching the values placed
+%    back into the 'bus' and 'branch' structures.
+norm(bu2.V_mag' - V,inf)
+norm(bu2.V_angle' - delta,inf)
+
+% 3. No errors in non-PQ bus voltage magnitudes, so no PV buses have been
+%    converted to PQ (gen limit reached).
+plot(bus.id(bus.type ~= 0), bus.V_mag(bus.type ~= 0)' - V(bus.type ~= 0))
+
+% 4. Using the evalMismatch() function, we see that the mismatches *appear*
+%    better using our computed results than with the published values.
+%    Perhaps there is an error in the way mismatches are calculated? Or
+%    perhaps the published values are just wrong??
+Y = makeYBus(bus,branch);
+sets.P = bus.id((bus.type == 0) | (bus.type == 1) | (bus.type == 2));
+sets.Q = bus.id((bus.type == 0) | (bus.type == 1));
+sets.H = [];
+mm1 = evalMismatch(sets, bus.V_mag', bus.V_angle' * (pi/180), ...
+        [], Y, bu2, br2); % Published results
+mm2 = evalMismatch(sets, V, delta  * (pi/180), ...
+        [], Y, bu2, br2); % Computed results
+norm(mm1,inf)
+norm(mm2,inf)
+plot([mm1, mm2]);
+
+% 5. MATPOWER's IEEE 30-bus test case seems to have errors in the published
+%    values as well, compared to MATPOWER's computed values. Perhaps it is
+%    simply an error in the master data set?
+casedata = case_ieee30;
+results = runpf(casedata);
+plot(casedata.bus(:,1), casedata.bus(:,8) - results.bus(:,8))   % V
+plot(casedata.bus(:,1), casedata.bus(:,9) - results.bus(:,9))   % delta
 
 %% IEEE 30 Bus System Test -- Histories
 % Full-Coupled Temperature Dependant Power Flow
