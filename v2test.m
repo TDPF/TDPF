@@ -115,14 +115,26 @@ mm = evalMismatch(sets,V,delta,T,Y,bus,branch);
 [V,delta,T,bus2,branch2] = SD_TDPF(bus,branch,'verbose',true);
 
 
-%% New England 39 Bus Test Data Import
+%% MATPOWER Test -- Data Import
 % Run an FC-TDPF where temperature dependence of all branches has been
-% disabled using the MATPOWER 30-bus test case and compare to MATPOWER's
+% disabled using the MATPOWER test cases and compare to MATPOWER's
 % results.
 
-% Get MATPOWER test case and results (needs MATPOWER in the path)
-casedata = case39;
-baseMVA = 100;
+% NOTES:
+%   Strange cases:
+%       case300     Seems to have extra generators connected to buses
+%                   labeled outside the system?? Doesn't work.
+%       case2383wp  FC_TDPF results in a voltage profile about 0.1 higher
+%                   overall than the MATPOWER solution!
+%       case2736sp  Many branches are status 0, that is, offline. Our
+%                   algorithm isn't set up to handle online/offline
+%                   branches, so it fails to create YBus correctly.
+%                   (This is also true of some of the other large test
+%                   systems.)
+
+% Import MATPOWER test case (needs MATPOWER in the path)
+casedata = case2746wp;      % Set test case here
+baseMVA = 100;              % Set MVA base here
 N = size(casedata.bus,1);
 L = size(casedata.branch,1);
 
@@ -165,18 +177,18 @@ L = size(casedata.branch,1);
     branch.R_ref = branch.R;
     branch.T_ref = branch.T_amb;
     branch.T_f = 228.1 * ones( size(branch.id) );
-    branch.T_rrise = 50 * ones( size(branch.id) );
+    branch.T_rrise = 25 * ones( size(branch.id) );
     branch.P_rloss = casedata.branch(:,6) ./ baseMVA;
     branch.R_therm = branch.T_rrise ./ branch.P_rloss;
     
     % Flip all column vectors to rows...
     name = fieldnames(bus);
     for i = 1:length(name)
-         bus.(name{i}) = bus.(name{i})'; 
+         bus.(name{i}) = bus.(name{i}).'; 
     end
     name = fieldnames(branch);
     for i = 1:length(name)
-         branch.(name{i}) = branch.(name{i})'; 
+         branch.(name{i}) = branch.(name{i}).'; 
     end
 
 % Reference YBus
@@ -187,11 +199,17 @@ YBusRef = makeYbus(baseMVA, casedata.bus, casedata.branch);
 
 % Difference (should always equal 0 within working precision)
 YDiff = YBusRef - Y;
-max(YDiff(:))
+max(abs(YDiff(:)))
 
-%% New England 39 Bus Test -- Conventional PF
+%% MATPOWER Test -- Conventional PF
+% MATPOWER settings
+mpopt = mpoption();
+mpopt(2) = 1e-8;        % Set tolerance
+mpopt(6) = 0;           % Don't enforce Q-limits on generation
+mpopt(31) = 1;          % Turn on verbose mode
+
 % Perform power flows w/ MATPOWER and FC_TDPF
-results = runpf(casedata);          % MATPOWER
+results = runpf(casedata,mpopt);    % MATPOWER
 [V,delta] = FC_TDPF(bus,branch);    % FC_TDPF
 
 % Check deviations from MATPOWER values
@@ -202,7 +220,30 @@ norm(results.bus(:,9) - delta,inf)
 plot(bus.id, results.bus(:,8) - V)
 plot(bus.id, results.bus(:,9) - delta)
 
-%% New England 39 Bus Test -- Histories
+% Comparison plots
+plot(bus.id, [results.bus(:,8), V])
+plot(bus.id, [results.bus(:,9), delta])
+
+% Oddly, these deviations can be very large in some systems even though the
+% mismatches come out within tolerance!
+
+% Check mismatches of MATPOWER results vs. our algorithm results, using the
+% evalMismatch(). (Should ferret out any major differences in mismatch
+% computations.)
+sets.P = bus.id((bus.type == 0) | (bus.type == 1) | (bus.type == 2));
+sets.Q = bus.id((bus.type == 0) | (bus.type == 1));
+sets.H = [];
+mm1 = evalMismatch(sets, results.bus(:,8), results.bus(:,9) * (pi/180), ...
+        [], Y, bus, branch); % MATPOWER results
+mm2 = evalMismatch(sets, V, delta  * (pi/180), ...
+        [], Y, bus, branch); % Computed results
+norm(mm1,inf)
+norm(mm2,inf)
+plot([mm1, mm2]);
+
+% For most systems tested, both results are within tolerance
+
+%% MATPOWER Test -- Histories
 % Change the lines to have temperature dependence
 branch.type = true( size(branch.id) ) ;
 
@@ -228,7 +269,7 @@ semilogy( 1:length(maxErrFC), maxErrFC, ...
           1:length(maxErrFD), maxErrFD, ...
           1:length(maxErrSD), maxErrSD )
 
-%% New England 39 Bus Test -- Timings
+%% MATPOWER Test -- Timings
 % Full-Coupled Temperature Dependant Power Flow
 tic
 for tmp = 1:10
