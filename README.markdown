@@ -1,8 +1,7 @@
 # TDPF #
 
-TDPF is a proof-of-concept ***T***emperature ***D***ependent ***P***ower
-***F***low algorithm implemented as a collection of self-documenting MATLAB
-scripts.
+TDPF is a proof-of-concept **T**emperature **D**ependent **P**ower **F**low
+algorithm implemented as a collection of self-documenting MATLAB scripts.
 
 Authors: Stephen Frank (atdsm) and Jason Sexauer ()
 
