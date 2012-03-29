@@ -132,67 +132,27 @@ mm = evalMismatch(sets,V,delta,T,Y,bus,branch);
 %                   (This is also true of some of the other large test
 %                   systems.)
 
-% Import MATPOWER test case (needs MATPOWER in the path)
-casedata = case2746wp;      % Set test case here
-baseMVA = 100;              % Set MVA base here
-N = size(casedata.bus,1);
-L = size(casedata.branch,1);
+casename = 'case2383wp';        % Set test case here
 
-    % Bus data
-    bus.id = casedata.bus(:,1);
-    bus.type = casedata.bus(:,2);
-        bus.type( bus.type == 1 ) = 0;  % Map MATPOWER's PQ number to ours
-    bus.P_load = casedata.bus(:,3) / baseMVA;
-    bus.Q_load = casedata.bus(:,4) / baseMVA;
-    bus.G = casedata.bus(:,5) / baseMVA;
-    bus.B = casedata.bus(:,6) / baseMVA;
-    bus.V_mag = casedata.bus(:,8);
-    bus.V_angle = casedata.bus(:,9);
-    
-    % Generator data
-    bus.P_gen = zeros(N,1);
-    bus.P_gen( casedata.gen(:,1) ) = casedata.gen(:,2) / baseMVA;
-    bus.Q_gen = zeros(N,1);
-    bus.Q_gen( casedata.gen(:,1) ) = casedata.gen(:,3) / baseMVA;
-    
-    % New power
-    bus.P_net = bus.P_gen - bus.P_load;
-    bus.Q_net = bus.Q_gen - bus.Q_load;
-    
-    % Branch data
-    branch.id = (1:L)';
-    branch.type = false( size(branch.id) ) ;
-    branch.from = casedata.branch(:,1);
-    branch.to = casedata.branch(:,2);
-    branch.R = casedata.branch(:,3);
-    branch.X = casedata.branch(:,4);
-    branch.B = casedata.branch(:,5);
-    branch.tap = casedata.branch(:,9);
-        branch.tap( branch.tap == 0 ) = 1;
-        branch.tap = branch.tap .* (...
-            cosd(casedata.branch(:,10)) ...
-            + 1j * sind(casedata.branch(:,10)) );
-    branch.T_amb = 25 * ones( size(branch.id) );
-    branch.T = branch.T_amb;
-    branch.R_ref = branch.R;
-    branch.T_ref = branch.T_amb;
-    branch.T_f = 228.1 * ones( size(branch.id) );
-    branch.T_rrise = 25 * ones( size(branch.id) );
-    branch.P_rloss = casedata.branch(:,6) ./ baseMVA;
-    branch.R_therm = branch.T_rrise ./ branch.P_rloss;
-    
-    % Flip all column vectors to rows...
-    name = fieldnames(bus);
-    for i = 1:length(name)
-         bus.(name{i}) = bus.(name{i}).'; 
-    end
-    name = fieldnames(branch);
-    for i = 1:length(name)
-         branch.(name{i}) = branch.(name{i}).'; 
-    end
+% Import MATPOWER test case (needs MATPOWER in the path) and check for
+% open lines.
+casedata = loadcase(casename);      
+if any( casedata.branch(:,11) == 0 )
+    warning(['Open lines detected in MATPOWER case data. Our ' ...
+             'algorithm can''t handle that yet.']);
+end
+
+% Convert casedata to our format
+[bus,branch,SBase,TBase] = importCaseData(casename,'MATPOWER');
+
+% Set branch types to zero (for now)
+branch.type(:) = false;
+
+% For visualization: Scatterplot rated losses vs. resistance values
+% loglog(branch.rating, branch.P_rloss,'.')
 
 % Reference YBus
-YBusRef = makeYbus(baseMVA, casedata.bus, casedata.branch);
+YBusRef = makeYbus(SBase, casedata.bus, casedata.branch);
 
 % Calculated YBus
 [Y,G,B,~,~] = makeYBus(bus,branch);
@@ -308,8 +268,16 @@ disp(' ');
       
       
 %% IEEE 30 Bus System Data Import
-[bus,N,PQ,PV,Slack] = makeBusStruct('IEEE_30_BUS.csv');
-branch = makeBranchStruct('IEEE_30_BRANCH.csv','TBase',100);
+% Import from file
+[bus,branch,SBase,TBase] = importCaseData( ...
+    {'IEEE_30_BUS.csv','IEEE_30_BRANCH.csv'}, 'CSV', 'TBase', 100);
+
+% Generate N, L, and PV/PQ/Slack bus sets
+N = length(bus.id);
+L = length(branch.id);
+PQ = sort(bus.id(bus.type == 0 | bus.type == 1));
+PV = sort(bus.id( bus.type == 2));
+Slack = sort(bus.id( bus.type == 3));
 
 %% IEEE 30 Bus System Test -- Conventional PF
 % Same kind of test but with published IEEE 30 bus test case
@@ -386,6 +354,10 @@ semilogy( 1:length(maxErrFC), maxErrFC, ...
           1:length(maxErrSD), maxErrSD )
       
 %% IEEE 30 Bus System Test -- Timings
+% NOTE: These no longer give much useful info. since the import process
+% removes the temperature-dependence of lines in the IEEE 30 bus test
+% system.
+
 % Full-Coupled Temperature Dependant Power Flow
 tic
 for tmp = 1:10
@@ -420,4 +392,4 @@ x/10
 
 % Put a space in the console
 % (Good for comparing times when repeatedly evaluating this block)
-disp(' ');
+disp('- - -');
