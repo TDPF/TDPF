@@ -145,9 +145,6 @@ end
 % Convert casedata to our format
 [bus,branch,SBase,TBase] = importCaseData(casename,'MATPOWER');
 
-% Set branch types to zero (for now)
-branch.type(:) = false;
-
 % For visualization: Scatterplot rated losses vs. resistance values
 % loglog(branch.rating, branch.P_rloss,'.')
 
@@ -170,7 +167,7 @@ mpopt(31) = 1;          % Turn on verbose mode
 
 % Perform power flows w/ MATPOWER and FC_TDPF
 results = runpf(casedata,mpopt);    % MATPOWER
-[V,delta] = FC_TDPF(bus,branch);    % FC_TDPF
+[V,delta] = PF(bus,branch);         % Conventional PF
 
 % Check deviations from MATPOWER values
 norm(results.bus(:,8) - V,inf)
@@ -204,9 +201,6 @@ plot([mm1, mm2]);
 % For most systems tested, both results are within tolerance
 
 %% MATPOWER Test -- Histories
-% Change the lines to have temperature dependence
-branch.type = true( size(branch.id) ) ;
-
 % Full-Coupled Temperature Dependant Power Flow
 [V,delta,T,bus2,branch2,hist] = FC_TDPF(bus,branch,'history',true);
 maxErrFC = hist.maxErr;
