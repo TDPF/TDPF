@@ -87,9 +87,6 @@
 %      issued and the latest values returned.
 %   3. Verbose mode turns on all kinds of reporting and is useful for
 %      troubleshooting.
-%
-% TO DO:
-%   1. Add ability to create a history matrix
 function [V,delta,T,bus,branch,hist] = PD_TDPF(bus,branch,varargin)
     %%Setup	
     % Default control parameters
@@ -381,8 +378,6 @@ function [V,delta,T,bus,branch,hist] = PD_TDPF(bus,branch,varargin)
 		iter = iter + 1;
 		if (verbose), disp(''), end
       
-        % Create history matrix
-        % TO DO: Get back to this
 	end	% End While
     
     % Warn if maximum iterations exceeded

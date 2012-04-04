@@ -43,8 +43,7 @@
 %                   .T_f = Thermal coefficentfor each branch 
 %                   .R_therm = Thermal resistance of each branch element
 %               A structure returned from makeBranchStruct() will satisfy
-%               these requirements. For 'type' == 4, this argument is
-%               ignored (and may safely be replaced by an empty matrix).
+%               these requirements.
 %
 % OUTPUTS:
 %   J =         Jacobian matrix (or matrices) with structure dependent on
