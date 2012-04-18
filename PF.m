@@ -42,6 +42,10 @@
 %   'history', [val]    Enable history mode (saves and returns state
 %                       variables at each iteration)? TRUE/FALSE
 %                       Default = FALSE
+%   'lineLoad', [val]   When history mode is enabled, saves the
+%                       line loadings (as a percent of line rating) into
+%                       the history structure.
+%                       Default = FALSE
 %
 %   Note that the names of these optional arguments are not case sensitive.
 %
@@ -75,6 +79,7 @@ function [V,delta,bus,hist] = PF(bus,branch,varargin)
 	maxIter = 30;		% Maximum number of iterations
 	verbose = false;	% Set to TRUE to spit out a bunch of diagnostics
     history = false;    % Set to TRUE to save and return iteration history
+    calcLineLoadings = false;  % Set to TRUE to return line loadings
 	
     % Number of buses and branches
     N = length(bus.id);
@@ -92,6 +97,8 @@ function [V,delta,bus,hist] = PF(bus,branch,varargin)
 				verbose = varargin{2};
 			case {'history'}
 				history = varargin{2};
+            case {'lineload'}
+                calcLineLoadings = varargin{2};
             % Initial states, etc.
             case {'v'}
                 x = varargin{2};
@@ -184,6 +191,24 @@ function [V,delta,bus,hist] = PF(bus,branch,varargin)
     if (size(delta,2) > size(delta,1))      % If # columns > # rows
         delta = delta';
     end
+    
+    % Record initial states in history
+    if history
+        % Evaluate YBus
+        [Y,G,B,trash,trash] = makeYBus(bus,branch);
+        
+        % Iteration -1 = starting conditions
+        hist.iter = -1;
+        
+        % States
+        hist.states.delta = delta;
+        hist.states.V = V;
+        
+        % Mismatches
+        mm = evalMismatch(sets,V,delta,[],Y,bus,[]);
+        hist.mismatches.P = mm(1:(N-1));
+        hist.mismatches.Q = mm((N-1)+(1:M));
+    end
 	      
     %% Power Flow Algorithm
 	% Perform iteration until convergence (or max. iterations)
@@ -197,7 +222,7 @@ function [V,delta,bus,hist] = PF(bus,branch,varargin)
         end
         
         % Evaluate YBus
-        [Y,G,B,~,~] = makeYBus(bus,branch);
+        [Y,G,B,trash,trash] = makeYBus(bus,branch);
         
         % Evaluate Jacobian (Conventional Power Flow)
         J = evalJacobian(4,sets,V,delta,[],G,B,branch);
@@ -258,19 +283,40 @@ function [V,delta,bus,hist] = PF(bus,branch,varargin)
     end
     
     %% Parse Results of Power Flow
-	% Convert delta back to degrees
-	delta = delta * 180 / pi;
-    
-    % Store final results back to 'bus'
-    bus.V_mag = V';
-    bus.V_angle = delta';
-    
-    % Compute maximum error at each iteration and store to history
+	% Compute maximum error at each iteration and store to history
     if history
         hist.maxErr = max( [ ...
                         max( abs( hist.mismatches.P ) ); ...
                         max( abs( hist.mismatches.Q ) ) ...
                         ] );
     end
+    
+    % Compute line loadings as a percent of line rating if requested
+    if calcLineLoadings && history,
+        branch.y = 1 ./ (branch.R + 1j*branch.X);
+        V_phasor = V .* exp(1j*delta);
+        
+        % Compute power loss in branch
+        for ik = 1:length(branch.y),
+            % Get appropriate indices
+            i = branch.from(ik);
+            k = branch.to(ik);
+
+            % Compute power in branch
+            S(ik) = V_phasor(i) * conj(branch.y(ik)*...
+                    (V_phasor(i)-V_phasor(k)));
+            % Compute as a percent of rating
+            LineLoadings(ik) = abs(S(ik))/branch.rating(ik);
+        end
+              
+        hist.lineLoad = LineLoadings;
+    end
+    
+    % Convert delta back to degrees
+	delta = delta * 180 / pi;
+    
+    % Store final results back to 'bus'
+    bus.V_mag = V';
+    bus.V_angle = delta';
     
 end	% End Function
