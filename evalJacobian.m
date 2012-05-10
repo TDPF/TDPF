@@ -72,8 +72,9 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
     %% Compute some necessary quantities for branch elements
     % (Required for all cases except type==4)
     if type ~= 4
-       % Compute series conductance of branch elements
+       % Compute series admittance of branch elements
        branch.g = branch.R ./ (branch.R.^2 + branch.X.^2);
+       branch.b = -branch.X ./ (branch.R.^2 + branch.X.^2);
     end
     
     %% Check and correct dimensions if needed
@@ -439,7 +440,7 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
                 % 'from' bus must be modified by tap ratio.
                 Vi = V(i) / abs(branch.tap(kn));
                 deltai = delta(i) - angle(branch.tap(kn));
-
+                
                 % 'to' bus is used directly
                 Vn = V(n);
                 deltan = delta(n);
@@ -519,7 +520,7 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
                 % 'to' bus is used directly
                 Vn = V(n);
                 deltan = delta(n);
-
+                
                 % Compute dQ/dT
                 jElem(count) = -Vi * Vn * ...
                                  sin(deltai - deltan) * dgdT + ...
@@ -607,7 +608,5 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
             error('Unrecognized Jacobian type.');
     end
 end
-
-
 
 

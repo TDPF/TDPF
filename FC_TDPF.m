@@ -236,6 +236,7 @@ function [V,delta,T,bus,branch,hist] = FC_TDPF(bus,branch,varargin)
     branch.R = branch.R_ref .* ...
         ( (branch.T + branch.T_f) ./ (branch.T_ref + branch.T_f) );
     branch.g = branch.R ./ (branch.R.^2 + branch.X.^2);
+    branch.b = -branch.X ./ (branch.R.^2 + branch.X.^2);
 	
     %% Conventional Power Flow - 1 Iteration
     % Perform a single iteration of conventional power flow in order to
@@ -366,6 +367,8 @@ function [V,delta,T,bus,branch,hist] = FC_TDPF(bus,branch,varargin)
             ( (branch.T(sets.T) + branch.T_f(sets.T)) ./ ...
             (branch.T_ref(sets.T) + branch.T_f(sets.T)) );
         branch.g(sets.T) = branch.R(sets.T) ./ ...
+            (branch.R(sets.T).^2 + branch.X(sets.T).^2);
+        branch.b(sets.T) = -branch.X(sets.T) ./ ...
             (branch.R(sets.T).^2 + branch.X(sets.T).^2);
         
 		% Increment iteration

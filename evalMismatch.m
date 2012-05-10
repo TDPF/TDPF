@@ -57,6 +57,7 @@ function mm = evalMismatch(sets,V,delta,T,Y,bus,branch)
     if R > 0
        % Compute series conductance of branch elements
        branch.g = branch.R ./ (branch.R.^2 + branch.X.^2);
+       branch.b = -branch.X ./ (branch.R.^2 + branch.X.^2);
     end
     
     %% Check and correct dimensions if needed

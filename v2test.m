@@ -136,6 +136,10 @@ casename = 'case2383wp';        % Set test case here
 
 % Import MATPOWER test case (needs MATPOWER in the path) and check for
 % open lines.
+% 
+% To add MATPOWER to your path, do
+%   addpath('C:\PATH\TO\MATPOWER');
+%   addpath('C:\PATH\TO\MATPOWER\t');
 casedata = loadcase(casename);      
 if any( casedata.branch(:,11) == 0 )
     warning(['Open lines detected in MATPOWER case data. Our ' ...
@@ -355,7 +359,7 @@ semilogy( 1:length(maxErrFC), maxErrFC, ...
 % Full-Coupled Temperature Dependant Power Flow
 tic
 for tmp = 1:10
-    [~] = FC_TDPF(bus,branch);
+    [trash] = FC_TDPF(bus,branch);
 end
 x = toc;
 x/10
@@ -363,7 +367,7 @@ x/10
 % Partially-Decoupled Temperature Dependant Power Flow
 tic
 for tmp = 1:10
-    [~] = PD_TDPF(bus,branch);
+    [trash] = PD_TDPF(bus,branch);
 end
 x = toc;
 x/10
@@ -371,7 +375,7 @@ x/10
 % Fast-Decoupled Temperature Dependant Power Flow
 tic
 for tmp = 1:10
-    [~] = FD_TDPF(bus,branch);
+    [trash] = FD_TDPF(bus,branch);
 end
 x = toc;
 x/10
@@ -379,7 +383,7 @@ x/10
 % Sequentially-Decoupled Temperature Dependant Power Flow
 tic
 for tmp = 1:10
-    [~] = SD_TDPF(bus,branch);
+    [trash] = SD_TDPF(bus,branch);
 end
 x = toc;
 x/10
@@ -387,3 +391,110 @@ x/10
 % Put a space in the console
 % (Good for comparing times when repeatedly evaluating this block)
 disp('- - -');
+
+%% Jacobian Matrix Test -- Off-nominal + Phase Shifting Branches
+% Tests the Jacobian matrix elements for dP/dT and dQ/dT for small changes
+% in temperature for off-nominal and phase-shifting branches. (The math for
+% these branches is very difficult and I'm trying to verify it
+% numerically.)
+
+% Case data import
+% casename = 'case39';
+casename = 'case2383wp';
+
+[bus,branch,SBase,TBase] = importCaseData(casename,'MATPOWER');
+
+% Sets
+    % Power mismatch -> PQ, PV buses
+    sets.P = bus.id((bus.type == 0) | (bus.type == 1) | (bus.type == 2));
+    % Reactive power mismatch -> PQ buses
+    sets.Q = bus.id((bus.type == 0) | (bus.type == 1));
+    % Temperature mismatch -> Temp. dependant lines
+    sets.H = branch.id((branch.type == true));
+    % Voltage angle variables -> PQ, PV buses
+    sets.delta = sets.P;
+    % Voltage magnitude variables -> PQ buses
+    sets.V = sets.Q;
+    % Temperature variables ->  Temp. dependant lines
+    sets.T = sets.H;
+    
+% Sizes
+    N = length(bus.id);
+    M = length(sets.Q);
+    L = length(sets.H);
+
+% % Find a branch with off-nominal tap
+% find((abs(branch.tap) ~= 1) & (branch.type ~= 0))	% Let's pick 33
+% kn = find(branch.id == 33);
+    
+% Find a branch with off-nominal phase shift
+find((imag(branch.tap) ~= 0) & (branch.type ~= 0))	% Let's pick 374
+kn = find(branch.id == 374);
+
+abs( branch.tap(kn) )                    % Display tap magnitude
+angle( branch.tap(kn) ) * 180 / pi       % Display tap voltage angle [deg]
+
+% Indices corresponding to this branch
+k = branch.from(kn);
+n = branch.to(kn);
+
+% Rows and columns of Jacobian matrix to check
+rowPf = find( sets.P == k );
+rowPt = find( sets.P == n );
+col = find( sets.H == kn) + (N+M-1);
+
+
+% Solve this test case with sequentially decoupled TDPF
+[V,delta,T,bus,branch,hist] = ...
+    PD_TDPF(bus,branch,'history',true,'maxIter',100);
+maxErrFD = hist.maxErr;
+
+% Find Admittance Matrix for solved power flow
+[Y,G,B,~,~] = makeYBus(bus,branch);
+
+% Find sensitivities (1st derivatives)
+J = evalJacobian(1, sets, V, delta * pi/180, T, G, B, branch);
+
+
+% Check these entries in the Jacobian
+disp( J(rowPf, col) );
+disp( J(rowPt, col) );
+
+% Evaluate the as-solved solved mismatches
+mm = evalMismatch(sets, V, delta * pi/180, T, Y, bus,branch);
+
+% Make a small change to T on that branch
+deltaT = 0.01;
+branch.T(kn) = branch.T(kn) + deltaT;
+branch.R(kn) = branch.R_ref(kn) .* ...
+    ( (branch.T(kn) + branch.T_f(kn)) ./ ...
+    (branch.T_ref(kn) + branch.T_f(kn)) );
+branch.g(kn) = branch.R(kn) ./ ...
+    (branch.R(kn).^2 + branch.X(kn).^2);
+branch.b(kn) = -branch.X(kn) ./ ...
+    (branch.R(kn).^2 + branch.X(kn).^2);
+[Y2,~,~,~,~] = makeYBus(bus,branch);
+
+% Evaluate the new mismatches
+mm2 = evalMismatch(sets,V,delta * pi/180,T,Y2,bus,branch);
+
+% Check the difference at the branches of interest
+disp('Actual P sensitivity, From/To')
+disp( mm(rowPf) - mm2(rowPf) );
+disp( mm(rowPt) - mm2(rowPt) );
+
+disp('Computed P sensitivity, From/To')
+disp( J(rowPf, col) * deltaT);
+disp( J(rowPt, col) * deltaT);
+
+%%
+% Actual P sensitivity, From/To
+%  -5.4567e-005
+% 
+%   7.0971e-005
+% 
+% Computed P sensitivity, From/To
+%    (1,1)     1.6978e-004
+% 
+%    (1,1)    -1.5479e-004
+
