@@ -541,6 +541,8 @@ branch.rating = casedata.branch(:,6);   % Branch normal operation MVA rating
     bus.Q_load = bus.Q_load ./ SBase;
     bus.P_gen  = bus.P_gen  ./ SBase;
     bus.Q_gen  = bus.Q_gen  ./ SBase;
+    bus.G      = bus.G      ./ SBase;   % MW   -> p.u. admittance
+    bus.B      = bus.B      ./ SBase;   % MVar -> p.u. admittance
 	
 	% Covert temperature data to per-unit using 'TBase'
     branch.T = branch.T ./ TBase ;
