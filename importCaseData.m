@@ -360,10 +360,18 @@ case 'matpower'
 % Import case data in MATPOWER format from file, either using MATPOWER's
 % loadcase() function (if MATPOWER is installed) or else by running the file
 % directly (assuming it will return the proper casedata structure)
-if exist('loadcase','file') == 2	% Check for MATPOWER loadcase() function
-	casedata = loadcase(filename);
+
+% Detect to see if we're getting passed the casedata already (don't have to
+% read it in from file)
+if isstruct(filename),
+    casedata = filename;
 else
-	casedata = eval(filename);
+    % Check for MATPOWER loadcase() function
+    if exist('loadcase','file') == 2	
+        casedata = loadcase(filename);
+    else
+        casedata = eval(filename);
+    end
 end
 
 % Compute bus and branch sizes
