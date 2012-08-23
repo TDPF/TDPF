@@ -105,6 +105,72 @@ xlabel('Iteration');
 ylabel('Largest Mismatch (log)');
 xlim([0 20]);   % Truncate FD_TDPF for readability
 
+%% Maximum Errors of Various Sorts
+% Compute results for PF vs. TDPF (using FC_TDPF)
+[V1,delta1,bus1,branch1] = PF(bus,branch);
+[V2,delta2,T2,bus2,branch2] = FC_TDPF(bus,branch);
+
+% Max. difference in voltage magnitude
+Vdiff = V1-V2;
+norm(Vdiff,Inf)                         % Absolute
+norm(Vdiff(abs(V1) > eps) ./ ...        % Pct. Relative to conventional PF
+    V1(abs(V1) > eps),Inf)*100              
+
+% Max. difference in voltage angle
+ddiff = delta1-delta2;
+norm(ddiff,Inf)                       	% Absolute
+norm(ddiff(abs(delta1) > eps) ./ ...    % Pct. Relative to conventional PF
+    delta1(abs(delta1) > eps),Inf)*100          
+
+% Max. difference in branch resistance
+Rdiff = branch1.R-branch2.R;
+norm(Rdiff,Inf)                         % Absolute
+norm(Rdiff(abs(branch1.R) > eps) ./ ...	% Pct. Relative to conventional PF
+    branch1.R(abs(branch1.R) > eps),Inf)*100 
+
+% Compute line loss
+V1p = V1 .* exp(1j.*delta1.*pi./180);
+V2p = V2 .* exp(1j.*delta2.*pi./180);
+lineloss1 = zeros(size(V1));
+lineloss2 = zeros(size(V2));
+for ik = 1:length(branch.id)
+    % Branch 1 loss
+    % Get appropriate indices
+    i = branch1.from(ik);
+    k = branch1.to(ik);
+    
+    y1 = 1 / (branch1.R(ik) + 1j*branch1.X(ik));
+    lineloss1(ik) = real( ...
+        V1p(i) * conj(y1 * (V1p(i) - V1p(k))) + ...
+        V1p(k) * conj(y1 * (V1p(k) - V1p(i))) ...
+        );
+    
+    % Branch 2 loss
+    % Get appropriate indices
+    i = branch2.from(ik);
+    k = branch2.to(ik);
+    
+    y2 = 1 / (branch2.R(ik) + 1j*branch2.X(ik));
+    lineloss2(ik) = real( ...
+        V2p(i) * conj(y2 * (V2p(i) - V2p(k))) + ...
+        V2p(k) * conj(y2 * (V2p(k) - V2p(i))) ...
+        );
+end
+lineloss1( lineloss1 < 10*eps ) = 0;
+lineloss2( lineloss2 < 10*eps ) = 0;
+
+% Max. difference in line loss
+lldiff = lineloss1-lineloss2;
+norm(lldiff,Inf)                      	% Absolute
+norm(lldiff(abs(lineloss1) > eps) ./ ...% Pct. Relative to conventional PF
+    lineloss1(abs(lineloss1) > eps),Inf)*100
+
+% Max. difference in total system loss
+sysloss1 = sum(bus1.P_net);
+sysloss2 = sum(bus2.P_net);
+abs(sysloss1 - sysloss2)              	% Absolute
+abs((sysloss1 - sysloss2)/sysloss1)*100 % Pct. Relative to conventional PF
+
 %% Timings
 % Conventional Power Flow
 tic
