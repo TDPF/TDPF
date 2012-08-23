@@ -392,12 +392,28 @@ function [V,delta,T,bus,branch,hist] = PD_TDPF(bus,branch,varargin)
     end
     
     %% Parse Results of Power Flow
+    % Compute final power injections
+    % (Uses last computed values of V, delta, and Y)
+    Vp = V .* ( cos(delta) + 1j*sin(delta) );	% Phasor voltages
+    S = Vp .* conj(Y * Vp);                     % Complex power injections
+    P = real(S);								% Real power injections
+    Q = imag(S);								% Reactive power injections
+    
+    % Buses which have P and Q as variables
+    sets.varP = setdiff(bus.id,sets.P);
+    sets.varQ = setdiff(bus.id,sets.Q);
+    
 	% Convert delta back to degrees
 	delta = delta * 180 / pi;
     
-    % Store final results back to 'bus' and 'branch'
+    % Store final results back to 'bus' and 'branch',
+    % including P and Q at relevant buses
     bus.V_mag = V';
     bus.V_angle = delta';
+    bus.P_net(sets.varP) = P(sets.varP);
+    bus.Q_net(sets.varQ) = Q(sets.varQ);
+    bus.P_gen(sets.varP) = bus.P_net(sets.varP) + bus.P_load(sets.varP);
+    bus.Q_gen(sets.varQ) = bus.Q_net(sets.varQ) + bus.Q_load(sets.varQ);
     branch.T = T';
     
     % Compute maximum error at each iteration and store to history
