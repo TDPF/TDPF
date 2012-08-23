@@ -8,10 +8,14 @@ clc
 %% Script Options
 % Choose one of the test cases below
 
+% Case 30
+% IEEE 30 bus test system
+casename = 'case30';
+
 % Case 39
 % This test includes a representation of the New England transmission
 % system.
-casename = 'case39';
+%casename = 'case39';
 
 % Case 2383wp
 % Power flow data for Polish system - winter 1999-2000 peak.
@@ -40,11 +44,13 @@ end
 % Convert casedata to our format
 [bus,branch,SBase,TBase] = importCaseData(casename,'MATPOWER');
 
+
 if tempCalcsMostLoaded,
     % Get rid of temp calcs on lower 95% of lines
     
     % Run a standard LF to determine line loadings
-    [V,delta,bus2,hist] = PF(bus,branch,'history',true,'lineLoad',true);
+    [V,delta,bus2,branch2,hist] = ...
+        PF(bus,branch,'history',true,'lineLoad',true);
     [sortedLoading, iSortedLoading] = sort(hist.lineLoad, 'ascend');
     topIndex = floor(length(sortedLoading)*0.95);
     
@@ -55,8 +61,13 @@ end
 %% Histories
 compTable = {'NR'; 'FC-TDPF'; 'PD-TDPF'; 'FD-TDPF'; 'SD-TDPF'};
 
+% All of the following now properly count iteration 0 as the initial
+% conditions and increment thereafter on each update of the state
+% variables, whether it is partial or complete. (I changed the algorithm
+% code to fix the discrepancies. -SF)
+
 % Conventional Power Flow
-[V,delta,bus2,hist] = PF(bus,branch,'history',true);
+[V,delta,bus2,branch2,hist] = PF(bus,branch,'history',true);
 maxErrPF = hist.maxErr;
 compTable{1,2} = max(hist.iter);
 
@@ -82,17 +93,17 @@ compTable{5,2} = [num2str(max(hist.subIter)) ' inner, ' ...
                   num2str(max(hist.iter)) ' outer'];
 
 % Plot error histories
-semilogy( 1:length(maxErrPF), maxErrPF, 'k+-', ...
-          1:length(maxErrFC), maxErrFC, 'k*-', ...
-          1:length(maxErrPD), maxErrPD, 'kd-', ...
-          1:length(maxErrFD), maxErrFD, 'ko-', ...
-          1:length(maxErrSD), maxErrSD, 'kx-' );
+semilogy( 0:length(maxErrPF)-1, maxErrPF, 'k+-', ...
+          0:length(maxErrFC)-1, maxErrFC, 'k*-', ...
+          0:length(maxErrPD)-1, maxErrPD, 'kd-', ...
+          0:length(maxErrFD)-1, maxErrFD, 'ko-', ...
+          0:length(maxErrSD)-1, maxErrSD, 'kx-' );
 legend('NR', 'FC-TDPF', 'PD-TDPF', 'FD-TDPF', 'SD-TDPF', ...
     'location', 'SouthEast');
 title('Convergence History');
 xlabel('Iteration');
 ylabel('Largest Mismatch (log)');
-xlim([1 20]);   % Truncate FD_TDPF for readability
+xlim([0 20]);   % Truncate FD_TDPF for readability
 
 %% Timings
 % Conventional Power Flow
