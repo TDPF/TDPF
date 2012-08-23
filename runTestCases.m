@@ -105,6 +105,35 @@ xlabel('Iteration');
 ylabel('Largest Mismatch (log)');
 xlim([0 20]);   % Truncate FD_TDPF for readability
 
+%% Save results
+% Maximum length
+maxlen = max( [length(maxErrPF), length(maxErrFC), length(maxErrPD), ...
+               length(maxErrFD), length(maxErrSD)] );
+
+% Right pad all results with NaN's so that they are of equal length
+maxErrPF = [maxErrPF, NaN(1,maxlen-length(maxErrPF))];
+maxErrFC = [maxErrFC, NaN(1,maxlen-length(maxErrFC))];
+maxErrPD = [maxErrPD, NaN(1,maxlen-length(maxErrPD))];
+maxErrFD = [maxErrFD, NaN(1,maxlen-length(maxErrFD))];
+maxErrSD = [maxErrSD, NaN(1,maxlen-length(maxErrSD))];
+
+% Combine in one matrix by columns
+allerr = [maxErrPF, maxErrFC, maxErrPD, maxErrFD, maxErrSD];
+allerr = reshape(allerr,maxlen,5);
+
+% Save to file
+% Order is:
+%	Conventional NR
+%	FC-TDPF
+%	PD-TDPF
+%	FD-TDPF
+%	SD-TDPF
+if tempCalcsMostLoaded
+    csvwrite([casename ' - 95th pct lines.csv'],allerr)
+else
+    csvwrite([casename ' - all lines.csv'],allerr)
+end
+
 %% Maximum Errors of Various Sorts
 % Compute results for PF vs. TDPF (using FC_TDPF)
 [V1,delta1,bus1,branch1] = PF(bus,branch);
