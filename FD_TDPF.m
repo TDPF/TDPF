@@ -276,8 +276,8 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
 
     % Record initial states in history
     if history
-        % Iteration -1 = starting conditions
-        hist.iter = -1;
+        % Iteration 0 = starting conditions
+        hist.iter = 0;
         
         % States
         hist.states.delta = delta;
@@ -321,7 +321,9 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
         
     %% Power Flow Algorithm
 	% Perform iteration until convergence (or max. iterations)
-	iter = 0;			% Iteration counter
+	iter = 1;			% Iteration counter
+                        % (Starts at 1 to account for initial iteration
+                        %  of conventional power flow)
 	while ( iter < maxIter )
 		% Display iteration info
         if (verbose)
@@ -332,7 +334,7 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
         end
         
         % Evaluate YBus
-        [Y,~,~,~,~] = makeYBus(bus,branch);
+        [Y,trash,trash,trash,trash] = makeYBus(bus,branch);
 
         % Evaluate mismatches
         mm = evalMismatch(sets,V,delta,T,Y,bus,branch);

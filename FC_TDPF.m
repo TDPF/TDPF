@@ -243,15 +243,15 @@ function [V,delta,T,bus,branch,hist] = FC_TDPF(bus,branch,varargin)
     % improve the initial estimate of line temperatures.
     
     % Initialize YBus
-    [Y,G,B,~,~] = makeYBus(bus,branch);
+    [Y,G,B,trash,trash] = makeYBus(bus,branch);
     
     % Evaluate Jacobian
     J = evalJacobian(4,sets,V,delta,[],G,B,branch);
 
     % Record initial states in history
     if history
-        % Iteration -1 = starting conditions
-        hist.iter = -1;
+        % Iteration 0 = starting conditions
+        hist.iter = 0;
         
         % States
         hist.states.delta = delta;
@@ -297,7 +297,9 @@ function [V,delta,T,bus,branch,hist] = FC_TDPF(bus,branch,varargin)
         
     %% Power Flow Algorithm
 	% Perform iteration until convergence (or max. iterations)
-	iter = 0;			% Iteration counter
+	iter = 1;			% Iteration counter
+                        % (Starts at 1 to account for initial iteration
+                        %  of conventional power flow)
 	while ( iter < maxIter )
 		% Display iteration info
         if (verbose)
@@ -308,7 +310,7 @@ function [V,delta,T,bus,branch,hist] = FC_TDPF(bus,branch,varargin)
         end
         
         % Evaluate YBus
-        [Y,G,B,~,~] = makeYBus(bus,branch);
+        [Y,G,B,trash,trash] = makeYBus(bus,branch);
         
         % Evaluate Jacobian
         J = evalJacobian(1,sets,V,delta,T,G,B,branch);

@@ -155,7 +155,7 @@ function [V,delta,T,bus,branch,hist] = SD_TDPF(bus,branch,varargin)
 		varargin(1:2) = [];
     end
 
-   % Storage structure for history (unused if 'history' == FALSE)
+    % Storage structure for history (unused if 'history' == FALSE)
     hist = struct;
     if history
         % Iteration/sub-iteration

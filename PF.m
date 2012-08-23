@@ -128,6 +128,18 @@ function [V,delta,bus,hist] = PF(bus,branch,varargin)
     
     % Storage structure for history (unused if 'history' == FALSE)
     hist = struct;
+    if history
+        % Iteration
+        hist.iter = [];
+        
+        % States
+        hist.states.delta = [];
+        hist.states.V = [];
+        
+        % Mismatches
+        hist.mismatches.P = [];
+        hist.mismatches.Q = [];
+    end
     
     %% Determine appropriate variable and mismatch sets
     % Power mismatch -> PQ, PV buses
@@ -192,23 +204,6 @@ function [V,delta,bus,hist] = PF(bus,branch,varargin)
         delta = delta';
     end
     
-    % Record initial states in history
-    if history
-        % Evaluate YBus
-        [Y,G,B,trash,trash] = makeYBus(bus,branch);
-        
-        % Iteration -1 = starting conditions
-        hist.iter = -1;
-        
-        % States
-        hist.states.delta = delta;
-        hist.states.V = V;
-        
-        % Mismatches
-        mm = evalMismatch(sets,V,delta,[],Y,bus,[]);
-        hist.mismatches.P = mm(1:(N-1));
-        hist.mismatches.Q = mm((N-1)+(1:M));
-    end
 	      
     %% Power Flow Algorithm
 	% Perform iteration until convergence (or max. iterations)
