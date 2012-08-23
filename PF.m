@@ -72,7 +72,7 @@
 %      issued and the latest values returned.
 %   3. Verbose mode turns on all kinds of reporting and is useful for
 %      troubleshooting.
-function [V,delta,bus,hist] = PF(bus,branch,varargin)
+function [V,delta,bus,branch,hist] = PF(bus,branch,varargin)
     %%Setup	
     % Default control parameters
 	tol = 1e-08;		% PQH mismatch tolerance
