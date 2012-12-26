@@ -46,6 +46,8 @@
 %                       line loadings (as a percent of line rating) into
 %                       the history structure.
 %                       Default = FALSE
+%   'FD', [val]         Use fast-decoupled algorithm? TRUE/FALSE
+%                       Default = FALSE
 %
 %   Note that the names of these optional arguments are not case sensitive.
 %
@@ -79,7 +81,8 @@ function [V,delta,bus,branch,hist] = PF(bus,branch,varargin)
 	maxIter = 30;		% Maximum number of iterations
 	verbose = false;	% Set to TRUE to spit out a bunch of diagnostics
     history = false;    % Set to TRUE to save and return iteration history
-    calcLineLoadings = false;  % Set to TRUE to return line loadings
+    calcLineLoadings = false;   % Set to TRUE to return line loadings
+    fastDecoupled = false;      % Set to TRUE to use fast-decoupled alg.
 	
     % Number of buses and branches
     N = length(bus.id);
@@ -99,6 +102,8 @@ function [V,delta,bus,branch,hist] = PF(bus,branch,varargin)
 				history = varargin{2};
             case {'lineload'}
                 calcLineLoadings = varargin{2};
+            case {'fd'}
+                fastDecoupled = varargin{2};
             % Initial states, etc.
             case {'v'}
                 x = varargin{2};
@@ -204,77 +209,156 @@ function [V,delta,bus,branch,hist] = PF(bus,branch,varargin)
         delta = delta';
     end
     
-	      
-    %% Power Flow Algorithm
+	%% Power Flow Algorithm - Conventional Newton Raphson
 	% Perform iteration until convergence (or max. iterations)
-	iter = 0;			% Iteration counter
-	while ( iter < maxIter )
-		% Display iteration info
-        if (verbose)
-			disp( ['Iteration: ' int2str(iter)] );
-			disp( 'Voltages Magnitudes:' ); disp(V);
-			disp( 'Voltages Angles:' ); disp(delta);
-        end
-        
+	if ~fastDecoupled
         % Evaluate YBus
-        [Y,G,B,trash,trash] = makeYBus(bus,branch);
+        [Y,G,B,~,~] = makeYBus(bus,branch);
         
-        % Evaluate Jacobian (Conventional Power Flow)
-        J = evalJacobian(4,sets,V,delta,[],G,B,branch);
-
-        % Evaluate mismatches
-        mm = evalMismatch(sets,V,delta,[],Y,bus,[]);
-        
-        % Display Mismatches
-		if (verbose)
-			disp('Real Power Mismatch:')
-				disp( mm(1:(N-1)) )
-			disp('Reactive Power Mismatch:')
-				disp( mm((N-1)+(1:M)) )
-		end
- 
-        % Record this iteration in history
-        if history
-            % Iteration
-            hist.iter = [hist.iter, iter];
-
-            % States
-            hist.states.delta = [hist.states.delta, delta];
-            hist.states.V = [hist.states.V, V];
-
-            % Mismatches
-            hist.mismatches.P = [hist.mismatches.P, mm(1:(N-1))];
-            hist.mismatches.Q = [hist.mismatches.Q, mm((N-1)+(1:M))];
-        end
-                
-        % Update state vector
-        x = [delta(sets.delta); V(sets.V)];
-
-        % Calculate maximum mismatch / perform update
-        err = norm(mm, inf);
-        if ( err <= tol )
+        iter = 0;			% Iteration counter
+        while ( iter < maxIter )
+            % Display iteration info
             if (verbose)
-                disp('Conventional Power Flow Converged.')
-                disp('')
+                disp( ['Iteration: ' int2str(iter)] );
+                disp( 'Voltages Magnitudes:' ); disp(V);
+                disp( 'Voltages Angles:' ); disp(delta);
             end
-            break;
-        else
-            % Perform update
-            xnew = x + J \ mm;
-            delta(sets.delta) = xnew(1:(N-1));
-            V(sets.V)         = xnew((N-1)+(1:M));
+
+            % Evaluate Jacobian (Conventional Power Flow)
+            J = evalJacobian(4,sets,V,delta,[],G,B,branch);
+
+            % Evaluate mismatches
+            mm = evalMismatch(sets,V,delta,[],Y,bus,[]);
+
+            % Display Mismatches
+            if (verbose)
+                disp('Real Power Mismatch:')
+                    disp( mm(1:(N-1)) )
+                disp('Reactive Power Mismatch:')
+                    disp( mm((N-1)+(1:M)) )
+            end
+
+            % Record this iteration in history
+            if history
+                % Iteration
+                hist.iter = [hist.iter, iter];
+
+                % States
+                hist.states.delta = [hist.states.delta, delta];
+                hist.states.V = [hist.states.V, V];
+
+                % Mismatches
+                hist.mismatches.P = [hist.mismatches.P, mm(1:(N-1))];
+                hist.mismatches.Q = [hist.mismatches.Q, mm((N-1)+(1:M))];
+            end
+
+            % Update state vector
+            x = [delta(sets.delta); V(sets.V)];
+
+            % Calculate maximum mismatch / perform update
+            err = norm(mm, inf);
+            if ( err <= tol )
+                if (verbose)
+                    disp('Conventional Power Flow Converged.')
+                    disp('')
+                end
+                break;
+            else
+                % Perform update
+                xnew = x + J \ mm;
+                delta(sets.delta) = xnew(1:(N-1));
+                V(sets.V)         = xnew((N-1)+(1:M));
+            end
+
+            % Increment iteration
+            iter = iter + 1;
+            if (verbose), disp(''), end
+
+        end	% End While
+
+        % Warn if maximum iterations exceeded
+        if iter >= maxIter
+            warning(['Maximum number of power flow iterations exceeded ' ...
+                     'prior to convergence within specified tolerance.']);
         end
-        
-		% Increment iteration
-		iter = iter + 1;
-		if (verbose), disp(''), end
-      
-	end	% End While
+    end
     
-    % Warn if maximum iterations exceeded
-    if iter >= maxIter
-        warning(['Maximum number of power flow iterations exceeded ' ...
-                 'prior to convergence within specified tolerance.']);
+	%% Power Flow Algorithm - Fast Decoupled
+	% Perform iteration until convergence (or max. iterations)
+	if fastDecoupled
+        % Evaluate YBus
+        [Y,G,B,~,~] = makeYBus(bus,branch);
+        
+        % Jacobian matrices are computed and inverted only once.
+        J = evalJacobian(5,sets,V,delta,[],G,B,branch);
+        invJP = inv(J{1});     % J1 inverse
+        invJQ = inv(J{2});     % J4 inverse
+        
+        iter = 0;			% Iteration counter
+        while ( iter < maxIter )
+            % Display iteration info
+            if (verbose)
+                disp( ['Iteration: ' int2str(iter)] );
+                disp( 'Voltages Magnitudes:' ); disp(V);
+                disp( 'Voltages Angles:' ); disp(delta);
+            end
+
+            % Evaluate YBus
+            [Y,G,B,~,~] = makeYBus(bus,branch);
+
+            % Evaluate mismatches
+            mm = evalMismatch(sets,V,delta,[],Y,bus,[]);
+
+            % Display Mismatches
+            if (verbose)
+                disp('Real Power Mismatch:')
+                    disp( mm(1:(N-1)) )
+                disp('Reactive Power Mismatch:')
+                    disp( mm((N-1)+(1:M)) )
+            end
+
+            % Record this iteration in history
+            if history
+                % Iteration
+                hist.iter = [hist.iter, iter];
+
+                % States
+                hist.states.delta = [hist.states.delta, delta];
+                hist.states.V = [hist.states.V, V];
+
+                % Mismatches
+                hist.mismatches.P = [hist.mismatches.P, mm(1:(N-1))];
+                hist.mismatches.Q = [hist.mismatches.Q, mm((N-1)+(1:M))];
+            end
+
+            % Update state vector
+            x = [delta(sets.delta); V(sets.V)];
+
+            % Calculate maximum mismatch / perform update
+            err = norm(mm, inf);
+            if ( err <= tol )
+                if (verbose)
+                    disp('Conventional Power Flow Converged.')
+                    disp('')
+                end
+                break;
+            else
+                % Perform update
+                delta(sets.delta) = delta(sets.delta) + invJP * mm(1:(N-1));
+                V(sets.V)         = V(sets.V) + invJQ * mm((N-1)+(1:M));
+            end
+
+            % Increment iteration
+            iter = iter + 1;
+            if (verbose), disp(''), end
+
+        end	% End While
+
+        % Warn if maximum iterations exceeded
+        if iter >= maxIter
+            warning(['Maximum number of power flow iterations exceeded ' ...
+                     'prior to convergence within specified tolerance.']);
+        end
     end
     
     %% Parse Results of Power Flow

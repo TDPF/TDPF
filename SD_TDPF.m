@@ -275,7 +275,7 @@ function [V,delta,T,bus,branch,hist] = SD_TDPF(bus,branch,varargin)
         end
         
         % Evaluate YBus
-        [Y,G,B,~,~] = makeYBus(bus,branch);
+        [Y,G,B,trash,trash] = makeYBus(bus,branch);
  
         subIter = 0;        % Inner iteration counter
         while ( subIter < maxSubIter )

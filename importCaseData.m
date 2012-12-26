@@ -146,6 +146,7 @@
 %    import process, try checking the alignment of the columns in the
 %    source file. There's a ruler at the bottom of this script for that
 %    purpose.
+% 2. 
 function [bus,branch,SBase,TBase] = importCaseData(filename,srcflag,varargin)
     %% Validation
     % Check for valid source type
@@ -376,7 +377,7 @@ end
 
 % Compute bus and branch sizes
 N = size(casedata.bus,1);
-L = size(casedata.branch,1);
+L = sum( casedata.branch(:,11) > 0);
 
 % Import MVA base
 SBase = casedata.baseMVA;
@@ -392,23 +393,40 @@ bus.B = casedata.bus(:,6);
 bus.V_mag = casedata.bus(:,8);
 bus.V_angle = casedata.bus(:,9);
 
-% Import generator data (also goes into bus data)
+% Initialize generator data
 bus.P_gen = zeros(N,1);
-bus.P_gen( casedata.gen(:,1) ) = casedata.gen(:,2);
 bus.Q_gen = zeros(N,1);
-bus.Q_gen( casedata.gen(:,1) ) = casedata.gen(:,3);
+
+% Import generator data (also goes into bus data)
+% -- Drops offline generators from the data set
+% -- Aggregates all generators at each bus
+% -- Ignores reactive power limits
+allgen = find( casedata.gen(:,8) > 0 );
+for g = allgen'                         % <-- Note the transpose
+     % Real power
+     bus.P_gen( casedata.gen(g,1) ) = ...
+         bus.P_gen( casedata.gen(g,1) ) + casedata.gen(g,2);
+     
+     % Reactive power
+     bus.Q_gen( casedata.gen(g,1) ) = ...
+         bus.Q_gen( casedata.gen(g,1) ) + casedata.gen(g,3);
+end
 
 % Import Branch data
+% -- Drops out of service branches
+onb = find( casedata.branch(:,11) );    % Only in-service branches
+
 branch.id = (1:L)';
-branch.from = casedata.branch(:,1);		% Branch from bus (or tap bus)
-branch.to = casedata.branch(:,2);		% Branch to bus (or Z bus)
-branch.R = casedata.branch(:,3);		% Branch resistance
-branch.X = casedata.branch(:,4);		% Branch reactance
-branch.B = casedata.branch(:,5);		% Branch shunt charging susceptance
-branch.tap = casedata.branch(:,9);		% Off-nominal tap ratio (real part)
-pshift = casedata.branch(:,10);			% Phase shift [deg]
-branch.rating = casedata.branch(:,6);   % Branch normal operation MVA rating
+branch.from = casedata.branch(onb,1);	% Branch from bus (or tap bus)
+branch.to = casedata.branch(onb,2);		% Branch to bus (or Z bus)
+branch.R = casedata.branch(onb,3);		% Branch resistance
+branch.X = casedata.branch(onb,4);		% Branch reactance
+branch.B = casedata.branch(onb,5);		% Branch shunt charging susceptance
+branch.tap = casedata.branch(onb,9);	% Off-nominal tap ratio (real part)
+pshift = casedata.branch(onb,10);		% Phase shift [deg]
+branch.rating = casedata.branch(onb,6); % Branch normal operation MVA rating
 										% (Used to calculate rated loss)
+
 %%% END %%
     end
     

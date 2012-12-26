@@ -243,7 +243,7 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
 	
     %% Compute Jacobian Matrices
     % Initialize YBus
-    [Y,G,B,~,~] = makeYBus(bus,branch);
+    [Y,G,B,trash,trash] = makeYBus(bus,branch);
     
     % Jacobian matrices are computed and inverted only once.
     J = evalJacobian(3,sets,V,delta,T,G,B,branch);

@@ -66,6 +66,9 @@ function [Y,G,B,YMag,YAng] = makeYBus(bus,branch)
         tt = branch.id( branch.to == k );
         
         % Compute Y(k,k)
+ %       if isequal(tt, [25 26 27]),    % What's this for?
+ %           disp('break')
+ %       end
         ytt = branch.y(tt) + 1j .* branch.B(tt) ./ 2;
         yff = (branch.y(ff) + 1j .* branch.B(ff) ./ 2 ) ...
               ./ (branch.tap(ff) .* conj(branch.tap(ff)));

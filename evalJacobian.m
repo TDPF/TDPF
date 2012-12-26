@@ -17,6 +17,8 @@
 %               4 -- Jacobian matrix for conventional power flow (J1-J4);
 %                    needed for conventional power flow or for
 %                    sequentially decoupled TDPF (SD-TDPF)
+%               5 -- Jacobian submatrices J1 and J4 for conventional fast-
+%                    decoupled power flow
 %   sets =      Structure giving the bus/branch sets required to
 %               compute the dimensions and entries of the Jacobian
 %               submatrices. Must have the following elements:
@@ -59,6 +61,9 @@
 %               4 -- J is single matrix representing the Jacobian J1-J4
 %                    for conventional power flow. For use with conventional
 %                    power flow or SD-TDPF.
+%               5 -- J is a cell structure containing two Jacobian
+%                    submatrices: J1 and J4 (in that order).
+%               	 For use with fast-decoupled power flow.
 %
 % COMMENTS:
 %
@@ -604,6 +609,8 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
             J = {J1,J4,J9};
         case 4  % Conventional PF or SD-TDPF
             J = [J1 J2; J3 J4];
+        case 5  % Fast-decoupled conventional PF
+            J = {J1,J4};
         otherwise
             error('Unrecognized Jacobian type.');
     end
