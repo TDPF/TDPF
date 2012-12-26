@@ -10,16 +10,20 @@ clc
 
 % Case 30
 % IEEE 30 bus test system
-casename = 'case30';
+%casename = 'case30';
 
 % Case 39
 % This test includes a representation of the New England transmission
 % system.
-%casename = 'case39';
+casename = 'case39';
 
 % Case 2383wp
 % Power flow data for Polish system - winter 1999-2000 peak.
 %casename = 'case2383wp';
+
+% Case 2736sp
+% Power flow data for Polish system - summer 2004 peak.
+%casename = 'case2736sp';
 
 %
 % Options:
@@ -36,14 +40,9 @@ tempCalcsMostLoaded = false;
 %   addpath('C:\PATH\TO\MATPOWER');
 %   addpath('C:\PATH\TO\MATPOWER\t');
 casedata = loadcase(casename);      
-if any( casedata.branch(:,11) == 0 )
-    error(['Open lines detected in MATPOWER case data. Our ' ...
-             'algorithm can''t handle that yet.']);
-end
 
 % Convert casedata to our format
 [bus,branch,SBase,TBase] = importCaseData(casename,'MATPOWER');
-
 
 if tempCalcsMostLoaded,
     % Get rid of temp calcs on lower 95% of lines
@@ -59,7 +58,7 @@ if tempCalcsMostLoaded,
 end
 
 %% Histories
-compTable = {'NR'; 'FC-TDPF'; 'PD-TDPF'; 'FD-TDPF'; 'SD-TDPF'};
+compTable = {'PF'; 'FD-PF'; 'FC-TDPF'; 'PD-TDPF'; 'FD-TDPF'; 'SD-TDPF'};
 
 % All of the following now properly count iteration 0 as the initial
 % conditions and increment thereafter on each update of the state
@@ -71,39 +70,49 @@ compTable = {'NR'; 'FC-TDPF'; 'PD-TDPF'; 'FD-TDPF'; 'SD-TDPF'};
 maxErrPF = hist.maxErr;
 compTable{1,2} = max(hist.iter);
 
+% Fast Decoupled Power Flow
+[V,delta,bus2,branch2,hist] = PF(bus,branch,'history',true,...
+    'FD',true,'maxIter',100);
+maxErrPF2 = hist.maxErr;
+compTable{2,2} = max(hist.iter);
+
 % Full-Coupled Temperature Dependant Power Flow
 [V,delta,T,bus2,branch2,hist] = FC_TDPF(bus,branch,'history',true);
 maxErrFC = hist.maxErr;
-compTable{2,2} = max(hist.iter);
+compTable{3,2} = max(hist.iter);
 
 % Partially-Decoupled Temperature Dependant Power Flow
 [V,delta,T,bus2,branch2,hist] = PD_TDPF(bus,branch,'history',true);
 maxErrPD = hist.maxErr;
-compTable{3,2} = max(hist.iter);
+compTable{4,2} = max(hist.iter);
 
 % Fast-Decoupled Temperature Dependant Power Flow
 [V,delta,T,bus2,branch2,hist] = FD_TDPF(bus,branch,'history',true);
 maxErrFD = hist.maxErr;
-compTable{4,2} = max(hist.iter);
+compTable{5,2} = max(hist.iter);
 
 % Sequentially-Decoupled Temperature Dependant Power Flow
 [V,delta,T,bus2,branch2,hist] = SD_TDPF(bus,branch,'history',true);
 maxErrSD = hist.maxErr;
-compTable{5,2} = [num2str(max(hist.subIter)) ' inner, ' ...
+compTable{6,2} = [num2str(max(hist.subIter)) ' inner, ' ...
                   num2str(max(hist.iter)) ' outer'];
 
 % Plot error histories
 semilogy( 0:length(maxErrPF)-1, maxErrPF, 'k+-', ...
+          0:length(maxErrPF2)-1, maxErrPF2, 'k.-', ...
           0:length(maxErrFC)-1, maxErrFC, 'k*-', ...
           0:length(maxErrPD)-1, maxErrPD, 'kd-', ...
           0:length(maxErrFD)-1, maxErrFD, 'ko-', ...
           0:length(maxErrSD)-1, maxErrSD, 'kx-' );
-legend('NR', 'FC-TDPF', 'PD-TDPF', 'FD-TDPF', 'SD-TDPF', ...
+legend('Conventional PF', 'Fast Dec. PF', 'FC-TDPF', 'PD-TDPF', 'FD-TDPF', 'SD-TDPF', ...
     'location', 'SouthEast');
 title('Convergence History');
 xlabel('Iteration');
 ylabel('Largest Mismatch (log)');
 xlim([0 20]);   % Truncate FD_TDPF for readability
+
+% Addition of Fast-Decoupled PF to test cases is only done above here...
+% The following also needs to be modified.
 
 %% Save results
 % Maximum length
@@ -204,7 +213,7 @@ abs((sysloss1 - sysloss2)/sysloss1)*100 % Pct. Relative to conventional PF
 % Conventional Power Flow
 tic
 for tmp = 1:10
-    [trash] = PF(bus,branch);
+    [~] = PF(bus,branch);
 end
 x = toc;
 compTable{1,3} = x/10;
@@ -212,7 +221,7 @@ compTable{1,3} = x/10;
 % Full-Coupled Temperature Dependant Power Flow
 tic
 for tmp = 1:10
-    [trash] = FC_TDPF(bus,branch);
+    [~] = FC_TDPF(bus,branch);
 end
 x = toc;
 compTable{2,3} = x/10;
@@ -220,7 +229,7 @@ compTable{2,3} = x/10;
 % Partially-Decoupled Temperature Dependant Power Flow
 tic
 for tmp = 1:10
-    [trash] = PD_TDPF(bus,branch);
+    [~] = PD_TDPF(bus,branch);
 end
 x = toc;
 compTable{3,3} = x/10;
@@ -228,7 +237,7 @@ compTable{3,3} = x/10;
 % Fast-Decoupled Temperature Dependant Power Flow
 tic
 for tmp = 1:10
-    [trash] = FD_TDPF(bus,branch);
+    [~] = FD_TDPF(bus,branch);
 end
 x = toc;
 compTable{4,3} = x/10;
@@ -236,7 +245,7 @@ compTable{4,3} = x/10;
 % Sequentially-Decoupled Temperature Dependant Power Flow
 tic
 for tmp = 1:10
-    [trash] = SD_TDPF(bus,branch);
+    [~] = SD_TDPF(bus,branch);
 end
 x = toc;
 compTable{5,3} = x/10;

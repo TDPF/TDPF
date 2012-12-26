@@ -122,29 +122,29 @@ mm = evalMismatch(sets,V,delta,T,Y,bus,branch);
 
 % NOTES:
 %   Strange cases:
-%       case300     Seems to have extra generators connected to buses
-%                   labeled outside the system?? Doesn't work.
-%       case2383wp  FC_TDPF results in a voltage profile about 0.1 higher
-%                   overall than the MATPOWER solution!
-%       case2736sp  Many branches are status 0, that is, offline. Our
-%                   algorithm isn't set up to handle online/offline
-%                   branches, so it fails to create YBus correctly.
-%                   (This is also true of some of the other large test
-%                   systems.)
+%       case300         Seems to have extra generators connected to buses
+%                       labeled outside the system?? Doesn't work.
+%
+%       case3012wp      MATPOWER refuses to load this data (throws error)
+%
+%       case2383wp      Our PF results in a voltage profile which is higher
+%       case2736sp      or lower than MATPOWER's results for all these 
+%       case2746wp      cases, but the mismatches for both our solution and 
+%       case3120sp      MATPOWER's are within tolerance.
+%       case2737sop
+%
+%       case3375wp      Generates dimension mismatch errors when trying to
+%                       compare MATLAB's solution with ours. (??)
 
-casename = 'case2383wp';        % Set test case here
 
-% Import MATPOWER test case (needs MATPOWER in the path) and check for
-% open lines.
+casename = 'case39';        % Set test case here
+
+% Import MATPOWER test case (needs MATPOWER in the path).
 % 
 % To add MATPOWER to your path, do
 %   addpath('C:\PATH\TO\MATPOWER');
 %   addpath('C:\PATH\TO\MATPOWER\t');
-casedata = loadcase(casename);      
-if any( casedata.branch(:,11) == 0 )
-    warning(['Open lines detected in MATPOWER case data. Our ' ...
-             'algorithm can''t handle that yet.']);
-end
+casedata = loadcase(casename);
 
 % Convert casedata to our format
 [bus,branch,SBase,TBase] = importCaseData(casename,'MATPOWER');
@@ -167,23 +167,24 @@ max(abs(YDiff(:)))
 mpopt = mpoption();
 mpopt(2) = 1e-8;        % Set tolerance
 mpopt(6) = 0;           % Don't enforce Q-limits on generation
-mpopt(31) = 1;          % Turn on verbose mode
+mpopt(31) = 1;          % Enable verbose mode
 
 % Perform power flows w/ MATPOWER and FC_TDPF
-results = runpf(casedata,mpopt);    % MATPOWER
-[V,delta] = PF(bus,branch);         % Conventional PF
+results = runpf(casedata,mpopt);                    % MATPOWER
+[V,d] = PF(bus,branch);                             % Conventional PF
+[V2,d2] = PF(bus,branch,'FD',true,'maxIter',100);   % Fast-decoupled PF
 
 % Check deviations from MATPOWER values
 norm(results.bus(:,8) - V,inf)
-norm(results.bus(:,9) - delta,inf)
+norm(results.bus(:,9) - d,inf)
 
 % Plots of deviations
 plot(bus.id, results.bus(:,8) - V)
-plot(bus.id, results.bus(:,9) - delta)
+plot(bus.id, results.bus(:,9) - d)
 
-% Comparison plots
-plot(bus.id, [results.bus(:,8), V])
-plot(bus.id, [results.bus(:,9), delta])
+% Comparison plots (MATPOWER in blue, ours in green and red)
+plot(bus.id, [results.bus(:,8), V, V2])
+plot(bus.id, [results.bus(:,9), d, d2])
 
 % Oddly, these deviations can be very large in some systems even though the
 % mismatches come out within tolerance!
@@ -196,13 +197,18 @@ sets.Q = bus.id((bus.type == 0) | (bus.type == 1));
 sets.H = [];
 mm1 = evalMismatch(sets, results.bus(:,8), results.bus(:,9) * (pi/180), ...
         [], Y, bus, branch); % MATPOWER results
-mm2 = evalMismatch(sets, V, delta  * (pi/180), ...
-        [], Y, bus, branch); % Computed results
+mm2 = evalMismatch(sets, V, d  * (pi/180), ...
+        [], Y, bus, branch); % Computed results - Conventional PF
+mm3 = evalMismatch(sets, V2, d2  * (pi/180), ...
+        [], Y, bus, branch); % Computed results - Fast-decoupled PF
 norm(mm1,inf)
 norm(mm2,inf)
-plot([mm1, mm2]);
+norm(mm3,inf)
 
-% For most systems tested, both results are within tolerance
+plot([mm1, mm2, mm3]);   % (MATPOWER in blue, ours in green and red)
+
+% For most systems tested, MATPOWER and conventional PF are within
+% tolerance. (Fast-decoupled PF often times out.)
 
 %% MATPOWER Test -- Histories
 % Full-Coupled Temperature Dependant Power Flow
@@ -359,7 +365,7 @@ semilogy( 1:length(maxErrFC), maxErrFC, ...
 % Full-Coupled Temperature Dependant Power Flow
 tic
 for tmp = 1:10
-    [trash] = FC_TDPF(bus,branch);
+    [~] = FC_TDPF(bus,branch);
 end
 x = toc;
 x/10
@@ -367,7 +373,7 @@ x/10
 % Partially-Decoupled Temperature Dependant Power Flow
 tic
 for tmp = 1:10
-    [trash] = PD_TDPF(bus,branch);
+    [~] = PD_TDPF(bus,branch);
 end
 x = toc;
 x/10
@@ -375,7 +381,7 @@ x/10
 % Fast-Decoupled Temperature Dependant Power Flow
 tic
 for tmp = 1:10
-    [trash] = FD_TDPF(bus,branch);
+    [~] = FD_TDPF(bus,branch);
 end
 x = toc;
 x/10
@@ -383,7 +389,7 @@ x/10
 % Sequentially-Decoupled Temperature Dependant Power Flow
 tic
 for tmp = 1:10
-    [trash] = SD_TDPF(bus,branch);
+    [~] = SD_TDPF(bus,branch);
 end
 x = toc;
 x/10
