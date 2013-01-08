@@ -291,8 +291,8 @@ function [V,delta,bus,branch,hist] = PF(bus,branch,varargin)
         
         % Jacobian matrices are computed and inverted only once.
         J = evalJacobian(5,sets,V,delta,[],G,B,branch);
-        invJP = inv(J{1});     % J1 inverse
-        invJQ = inv(J{2});     % J4 inverse
+        JP = J{1};              % J1
+        JQ = J{2};              % J4
         
         iter = 0;			% Iteration counter
         while ( iter < maxIter )
@@ -302,9 +302,6 @@ function [V,delta,bus,branch,hist] = PF(bus,branch,varargin)
                 disp( 'Voltages Magnitudes:' ); disp(V);
                 disp( 'Voltages Angles:' ); disp(delta);
             end
-
-            % Evaluate YBus
-            [Y,G,B,~,~] = makeYBus(bus,branch);
 
             % Evaluate mismatches
             mm = evalMismatch(sets,V,delta,[],Y,bus,[]);
@@ -331,21 +328,18 @@ function [V,delta,bus,branch,hist] = PF(bus,branch,varargin)
                 hist.mismatches.Q = [hist.mismatches.Q, mm((N-1)+(1:M))];
             end
 
-            % Update state vector
-            x = [delta(sets.delta); V(sets.V)];
-
             % Calculate maximum mismatch / perform update
             err = norm(mm, inf);
             if ( err <= tol )
                 if (verbose)
-                    disp('Conventional Power Flow Converged.')
+                    disp('Fast Decoupled Power Flow Converged.')
                     disp('')
                 end
                 break;
             else
                 % Perform update
-                delta(sets.delta) = delta(sets.delta) + invJP * mm(1:(N-1));
-                V(sets.V)         = V(sets.V) + invJQ * mm((N-1)+(1:M));
+                delta(sets.delta) = delta(sets.delta) + JP \ mm(1:(N-1));
+                V(sets.V)         = V(sets.V) + JQ \ mm((N-1)+(1:M));
             end
 
             % Increment iteration
@@ -359,7 +353,7 @@ function [V,delta,bus,branch,hist] = PF(bus,branch,varargin)
             warning(['Maximum number of power flow iterations exceeded ' ...
                      'prior to convergence within specified tolerance.']);
         end
-    end
+	end
     
     %% Parse Results of Power Flow
 	% Compute maximum error at each iteration and store to history
