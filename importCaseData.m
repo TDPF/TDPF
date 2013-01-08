@@ -146,7 +146,12 @@
 %    import process, try checking the alignment of the columns in the
 %    source file. There's a ruler at the bottom of this script for that
 %    purpose.
-% 2. 
+%
+% 2. The bus ID's for data imported via this function WILL NOT MATCH the
+%    original data if the original buses are not numbered consecutively
+%    starting with 1. This is because the TDPF algorithms as written
+%    require consecutive bus numbers 1:N for an N bus system (a limitation
+%    of the original code). Keep this in mind when making comparisons.
 function [bus,branch,SBase,TBase] = importCaseData(filename,srcflag,varargin)
     %% Validation
     % Check for valid source type
@@ -403,13 +408,14 @@ bus.Q_gen = zeros(N,1);
 % -- Ignores reactive power limits
 allgen = find( casedata.gen(:,8) > 0 );
 for g = allgen'                         % <-- Note the transpose
-     % Real power
-     bus.P_gen( casedata.gen(g,1) ) = ...
-         bus.P_gen( casedata.gen(g,1) ) + casedata.gen(g,2);
-     
-     % Reactive power
-     bus.Q_gen( casedata.gen(g,1) ) = ...
-         bus.Q_gen( casedata.gen(g,1) ) + casedata.gen(g,3);
+    % New bus ID for this generator
+    i = find( casedata.gen(g,1) == casedata.bus(:,1), 1);
+
+    % Real power
+    bus.P_gen( i ) = bus.P_gen( i ) + casedata.gen(g,2);
+
+    % Reactive power
+    bus.Q_gen( i ) = bus.Q_gen( i ) + casedata.gen(g,3);
 end
 
 % Import Branch data
@@ -426,7 +432,16 @@ branch.tap = casedata.branch(onb,9);	% Off-nominal tap ratio (real part)
 pshift = casedata.branch(onb,10);		% Phase shift [deg]
 branch.rating = casedata.branch(onb,6); % Branch normal operation MVA rating
 										% (Used to calculate rated loss)
-
+                                        
+% Translate old bus ID's to new bus ID's
+for l = 1:L
+    % Old from bus -> New from bus
+    branch.from(l) = find( branch.from(l) == casedata.bus(:,1), 1);
+    
+    % Old to bus -> New to bus
+    branch.to(l) = find( branch.to(l) == casedata.bus(:,1), 1);
+end
+                                        
 %%% END %%
     end
     
