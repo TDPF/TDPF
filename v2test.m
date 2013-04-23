@@ -1,6 +1,7 @@
 %% Scratchpad: Tests version 2 of the TDPF algorithms
 %% Setup
-clear;
+clear all;
+close all;
 clc;
 
 %% Generate 3-Bus Test System
@@ -121,23 +122,23 @@ mm = evalMismatch(sets,V,delta,T,Y,bus,branch);
 % results.
 
 % NOTES:
+%   Normal cases:
+%       case39          New England 39-bus test system
+%       case30          Derived from IEEE 30-bus test system
+%       case2383wp      Polish 1999-2000 winter peak
+%       case2736sp      Polish 2004 summer peak
+%
 %   Strange cases:
-%       case300         Seems to have extra generators connected to buses
-%                       labeled outside the system?? Doesn't work.
-%
 %       case3012wp      MATPOWER refuses to load this data (throws error)
-%
-%       case2383wp      Our PF results in a voltage profile which is higher
-%       case2736sp      or lower than MATPOWER's results for all these 
-%       case2746wp      cases, but the mismatches for both our solution and 
-%       case3120sp      MATPOWER's are within tolerance.
-%       case2737sop
 %
 %       case3375wp      Generates dimension mismatch errors when trying to
 %                       compare MATLAB's solution with ours. (??)
 
-
 casename = 'case39';        % Set test case here
+
+% Case NYISO - outside data source
+% load('test_cases/nyiso_converted.mat');
+% casename = nyiso;
 
 % Import MATPOWER test case (needs MATPOWER in the path).
 % 
@@ -147,16 +148,18 @@ casename = 'case39';        % Set test case here
 casedata = loadcase(casename);
 
 % Convert casedata to our format
-[bus,branch,SBase,TBase] = importCaseData(casename,'MATPOWER');
+[bus,branch,SBase,~] = importCaseData(casename,'MATPOWER');
 
 % For visualization: Scatterplot rated losses vs. resistance values
 % loglog(branch.rating, branch.P_rloss,'.')
 
 % Reference YBus
+casedata2 = ext2int(casedata);
 YBusRef = makeYbus(SBase, casedata.bus, casedata.branch);
+clear('casedata2');
 
 % Calculated YBus
-[Y,G,B,~,~] = makeYBus(bus,branch);
+[Y,~,~,~,~] = makeYBus(bus,branch);
 
 % Difference (should always equal 0 within working precision)
 YDiff = YBusRef - Y;
@@ -172,7 +175,7 @@ mpopt(31) = 1;          % Enable verbose mode
 % Perform power flows w/ MATPOWER and FC_TDPF
 results = runpf(casedata,mpopt);                    % MATPOWER
 [V,d] = PF(bus,branch);                             % Conventional PF
-[V2,d2] = PF(bus,branch,'FD',true,'maxIter',100);   % Fast-decoupled PF
+[V2,d2] = PF(bus,branch,'FD',true,'maxIter',1000);	% Fast-decoupled PF
 
 % Check deviations from MATPOWER values
 norm(results.bus(:,8) - V,inf)
@@ -182,9 +185,12 @@ norm(results.bus(:,9) - d,inf)
 plot(bus.id, results.bus(:,8) - V)
 plot(bus.id, results.bus(:,9) - d)
 
-% Comparison plots (MATPOWER in blue, ours in green and red)
-plot(bus.id, [results.bus(:,8), V, V2])
+% Comparison plots
+plot(bus.id, [results.bus(:,8), V, V2]);
+legend('MATPOWER','Conventional PF','FDPF');
+
 plot(bus.id, [results.bus(:,9), d, d2])
+legend('MATPOWER','Conventional PF','FDPF');
 
 % Oddly, these deviations can be very large in some systems even though the
 % mismatches come out within tolerance!
@@ -195,36 +201,49 @@ plot(bus.id, [results.bus(:,9), d, d2])
 sets.P = bus.id((bus.type == 0) | (bus.type == 1) | (bus.type == 2));
 sets.Q = bus.id((bus.type == 0) | (bus.type == 1));
 sets.H = [];
+mm0 = evalMismatch(sets, bus.V_mag, bus.V_angle * (pi/180), ...
+        [], Y, bus, branch); % Original case data
 mm1 = evalMismatch(sets, results.bus(:,8), results.bus(:,9) * (pi/180), ...
         [], Y, bus, branch); % MATPOWER results
 mm2 = evalMismatch(sets, V, d  * (pi/180), ...
         [], Y, bus, branch); % Computed results - Conventional PF
 mm3 = evalMismatch(sets, V2, d2  * (pi/180), ...
         [], Y, bus, branch); % Computed results - Fast-decoupled PF
+norm(mm0,inf)
 norm(mm1,inf)
 norm(mm2,inf)
 norm(mm3,inf)
 
-plot([mm1, mm2, mm3]);   % (MATPOWER in blue, ours in green and red)
+% Plot magnitude of mismatches
+semilogy(abs([mm0, mm1, mm2, mm3]));
+legend('Original Data','MATPOWER','Conventional PF','FDPF');
 
 % For most systems tested, MATPOWER and conventional PF are within
 % tolerance. (Fast-decoupled PF often times out.)
 
 %% MATPOWER Test -- Histories
+% Initialize to solved power flow
+V_init = V;
+delta_init = d;
+
 % Full-Coupled Temperature Dependant Power Flow
-[V,delta,T,bus2,branch2,hist] = FC_TDPF(bus,branch,'history',true);
+[V,delta,T,bus2,branch2,hist] = FC_TDPF(bus, branch, ...
+    'history', true, 'V', V_init, 'delta', delta_init );
 maxErrFC = hist.maxErr;
 
 % Partially-Decoupled Temperature Dependant Power Flow
-[V,delta,T,bus2,branch2,hist] = PD_TDPF(bus,branch,'history',true);
+[V,delta,T,bus2,branch2,hist] = PD_TDPF(bus, branch, ...
+    'history', true, 'V', V_init, 'delta', delta_init );
 maxErrPD = hist.maxErr;
 
 % Fast-Decoupled Temperature Dependant Power Flow
-[V,delta,T,bus2,branch2,hist] = FD_TDPF(bus,branch,'history',true);
+[V,delta,T,bus2,branch2,hist] = FD_TDPF(bus, branch, ...
+    'history', true, 'V', V_init, 'delta', delta_init );
 maxErrFD = hist.maxErr;
 
 % Sequentially-Decoupled Temperature Dependant Power Flow
-[V,delta,T,bus2,branch2,hist] = SD_TDPF(bus,branch,'history',true);
+[V,delta,T,bus2,branch2,hist] = SD_TDPF(bus, branch, ...
+    'history', true, 'V', V_init, 'delta', delta_init );
 maxErrSD = hist.maxErr;
 
 % Plot error histories
@@ -232,6 +251,7 @@ semilogy( 1:length(maxErrFC), maxErrFC, ...
           1:length(maxErrPD), maxErrPD, ...
           1:length(maxErrFD), maxErrFD, ...
           1:length(maxErrSD), maxErrSD )
+legend('FC','PD','FD','SD');
 
 %% MATPOWER Test -- Timings
 % Full-Coupled Temperature Dependant Power Flow
@@ -269,7 +289,17 @@ x/10
 % Put a space in the console
 % (Good for comparing times when repeatedly evaluating this block)
 disp(' ');
-      
+
+%% Test of Timing Features
+% Run manually - test timings for each type of power flow
+if false
+    [~] = PF(bus,branch,'timing',true);
+    [~] = PF(bus,branch,'FD',true,'maxIter',1000,'timing',true);
+    [~] = FC_TDPF(bus,branch,'timing',true);
+    [~] = PD_TDPF(bus,branch,'timing',true);
+    [~] = FD_TDPF(bus,branch,'timing',true);
+    [~] = SD_TDPF(bus,branch,'timing',true);
+end
       
 %% IEEE 30 Bus System Data Import
 % Import from file
