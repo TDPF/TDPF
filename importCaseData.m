@@ -152,6 +152,15 @@
 %    starting with 1. This is because the TDPF algorithms as written
 %    require consecutive bus numbers 1:N for an N bus system (a limitation
 %    of the original code). Keep this in mind when making comparisons.
+%
+% 3. When importing from MATPOWER, the generator voltage setpoint WILL
+%    OVERRIDE any other specified bus voltage at the point where the
+%    generator connects. This is for consistency with how MATPOWER
+%    interprets the case data.
+%
+% 4. When importing from MATPOWER, if a bus is specified as PV but all
+%    connected generators are disabled, the bus is converted to a PQ bus.
+%    This is consistent with how MATPOWER treats bus types.
 function [bus,branch,SBase,TBase] = importCaseData(filename,srcflag,varargin)
     %% Validation
     % Check for valid source type
@@ -406,8 +415,8 @@ bus.Q_gen = zeros(N,1);
 % -- Drops offline generators from the data set
 % -- Aggregates all generators at each bus
 % -- Ignores reactive power limits
-allgen = find( casedata.gen(:,8) > 0 );
-for g = allgen'                         % <-- Note the transpose
+ongen = find( casedata.gen(:,8) > 0 );
+for g = ongen'                          % <-- Note the transpose
     % New bus ID for this generator
     i = find( casedata.gen(g,1) == casedata.bus(:,1), 1);
 
@@ -416,6 +425,26 @@ for g = allgen'                         % <-- Note the transpose
 
     % Reactive power
     bus.Q_gen( i ) = bus.Q_gen( i ) + casedata.gen(g,3);
+    
+    % Voltage setpoint
+    bus.V_mag( i ) = casedata.gen(g,6);
+end
+
+% For off generators, change associated bus type from PV -> PQ
+offgen = find( casedata.gen(:,8) == 0 );
+for g = offgen'                         % <-- Note the transpose
+    % New bus ID for this generator
+    i = find( casedata.gen(g,1) == casedata.bus(:,1), 1);
+    
+    % Break if an enabled generators is connected to this bus
+    if ismember(i, casedata.gen(ongen,1))
+        continue;
+    end
+
+    % Otherwise, swap PV -> PQ
+    if bus.type(i) == 2
+        bus.type(i) = 0;
+    end
 end
 
 % Import Branch data
@@ -648,4 +677,3 @@ end
 % Note that the 1st '%' counts as a character as part of the ruler
 %        10        20        30        40        50        60        70        80        90        100       110       120       130       140       150
 %   .    |    .    |    .    |    .    |    .    |    .    |    .    |    .    |    .    |    .    |    .    |    .    |    .    |    .    |    .    |
-
