@@ -70,10 +70,10 @@ function mm = evalMismatch(sets,V,delta,T,Y,bus,branch)
     end;
     
 	%% Compute power injections
-    Vp = V .* ( cos(delta) + 1j*sin(delta) );	% Phasor voltages
-    S = Vp .* conj(Y * Vp);                     % Complex power injections
-    P = real(S);								% Real power injections
-    Q = imag(S);								% Reactive power injections
+    Vp = V .* exp(1j .* delta);         % Phasor voltages
+    S = Vp .* conj(Y * Vp);             % Complex power injections
+    P = real(S);                        % Real power injections
+    Q = imag(S);						% Reactive power injections
 	
     %% Compute Mismatches
     % (Each is evaluated only for the specified set elements.)
