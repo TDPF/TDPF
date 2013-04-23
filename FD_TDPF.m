@@ -58,6 +58,8 @@
 %   'history', [val]    Enable history mode (saves and returns state
 %                       variables at each iteration)? TRUE/FALSE
 %                       Default = FALSE
+%   'timing', [val]     Display timing information? TRUE/FALSE
+%                       Default = FALSE
 %
 %   Note that the names of these optional arguments are not case sensitive.
 %
@@ -87,14 +89,16 @@
 %   2. If the maximum number of iterations is exceeded, a warning will be
 %      issued and the latest values returned.
 %   3. Verbose mode turns on all kinds of reporting and is useful for
-%      troubleshooting.
+%      troubleshooting. Enabling timing mode will calculate and display
+%      timing information for various algorithm tasks.
 function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
-    %%Setup	
+    %% Setup	
     % Default control parameters
 	tol = 1e-08;		% PQH mismatch tolerance
 	maxIter = 100;		% Maximum number of iterations
 	verbose = false;	% Set to TRUE to spit out a bunch of diagnostics
     history = false;    % Set to TRUE to save and return iteration history
+    timing = false;     % Set to TRUE to display timing info
 	
     % Number of buses and branches
     N = length(bus.id);
@@ -113,6 +117,8 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
 				verbose = varargin{2};
 			case {'history'}
 				history = varargin{2};
+            case {'timing'}
+				timing = varargin{2};
             % Initial states, etc.
             case {'v'}
                 x = varargin{2};
@@ -153,6 +159,23 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
     % Storage structure for history (unused if 'history' == FALSE)
     hist = struct;
     
+    % Timing
+    if timing
+        % Structure for timing
+        runtime = struct();
+        runtime.Total = 0;
+        runtime.Setup = 0;
+        runtime.YBus = 0;
+        runtime.Jacobian = 0;
+        runtime.MM = 0;
+        runtime.Temp = 0;
+        runtime.Update = 0;
+        
+        % Start timing
+        TotalTIC = tic;
+        SetupTIC = TotalTIC;
+    end
+    
     %% Determine appropriate variable and mismatch sets
     % Power mismatch -> PQ, PV buses
     sets.P = bus.id((bus.type == 0) | (bus.type == 1) | (bus.type == 2));
@@ -184,29 +207,23 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
     
     % Set up Voltage Magnitude, Voltage Angle, Temperature vectors
     % Voltage magnitude
+    V = bus.V_mag;
     if exist('VInput','var')
         if length(VInput) == 1
-            V = bus.V_mag;
             V(sets.V) = VInput;
         else
-            V = VInput;
+            V(sets.V) = VInput(sets.V);
         end  
-    else
-        V = bus.V_mag;
-        V(sets.V) = 1.0;
     end
     
     % Voltage angle
+    delta = bus.V_angle;
     if exist('deltaInput','var')
         if length(deltaInput) == 1
-            delta = bus.V_angle;
             delta(sets.delta) = deltaInput;
         else
-            delta = deltaInput;
+            delta(sets.delta) = deltaInput(sets.delta);
         end  
-    else
-        delta = bus.V_angle;
-        delta(sets.delta) = 0.0;
     end
     delta = delta * pi / 180;   % Convert to radians
     
@@ -240,19 +257,26 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
         ( (branch.T + branch.T_f) ./ (branch.T_ref + branch.T_f) );
     branch.g = branch.R ./ (branch.R.^2 + branch.X.^2);
     branch.b = -branch.X ./ (branch.R.^2 + branch.X.^2);
-	
+    
+    % Timing
+    if timing, runtime.Setup = toc(SetupTIC); end
+    
     %% Compute Jacobian Matrices
     % Initialize YBus
-    [Y,G,B,trash,trash] = makeYBus(bus,branch);
+    if timing, YBusTIC = tic; end
+    [Y,G,B,~,~] = makeYBus(bus,branch);
+    if timing, runtime.YBus = runtime.YBus + toc(YBusTIC); end
     
     % Jacobian matrices are computed and inverted only once.
+    if timing, JacobTIC = tic; end
     J = evalJacobian(3,sets,V,delta,T,G,B,branch);
-    invJP = inv(J{1});     % J1 inverse
-    invJQ = inv(J{2});     % J4 inverse
-    invJH = inv(J{3});     % J9 inverse
+    invJP = inv(J{1});      % J1 inverse
+    invJQ = inv(J{2});      % J4 inverse
+    invJH = inv(J{3});      % J9 inverse
 %    JP = J{1};              % J1
 %    JQ = J{2};              % J4
 %    JH = J{3};              % J9
+    if timing, runtime.Jacobian = runtime.Jacobian + toc(JacobTIC); end
 
     % Note: There are two possible ways to handle the matrix inversions in
     % the fast decoupled method:
@@ -294,17 +318,23 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
     % Evaluate mismatches
     s2 = sets;
     s2.H = [];
+    
+    if timing, MismatchTIC = tic; end
     mm = evalMismatch(s2,V,delta,[],Y,bus,branch);
+    if timing, runtime.MM = runtime.MM + toc(MismatchTIC); end
     
     % Perform update
+    if timing, UpdateTIC = tic; end
     delta(sets.delta) = delta(sets.delta) + invJP * mm(1:(N-1));
     V(sets.V)         = V(sets.V)         + invJQ * mm((N-1)+(1:M));
  %   delta(sets.delta) = delta(sets.delta) + JP \ mm(1:(N-1));
  %   V(sets.V)         = V(sets.V)         + JQ \ mm((N-1)+(1:M));
-    
+	if timing, runtime.Update = runtime.Update + toc(UpdateTIC); end
+ 
     %% Initial Temperature Estimate
     % Using the results of the power flow iteration above, compute better
     % guesses for initial starting temperatures.
+    if timing, TempTIC = tic; end
     for ij = sets.T
         % Get appropriate indices
 		i = branch.from(ij);
@@ -318,6 +348,7 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
         % temperature estimate
         T(ij) = branch.T_amb(ij) + PLoss * branch.R_therm(ij);
     end
+    if timing, runtime.Temp = runtime.Temp + toc(TempTIC); end
         
     %% Power Flow Algorithm
 	% Perform iteration until convergence (or max. iterations)
@@ -334,10 +365,14 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
         end
         
         % Evaluate YBus
-        [Y,trash,trash,trash,trash] = makeYBus(bus,branch);
+        if timing, YBusTIC = tic; end
+        [Y,~,~,~,~] = makeYBus(bus,branch);
+        if timing, runtime.YBus = runtime.YBus + toc(YBusTIC); end
 
         % Evaluate mismatches
+        if timing, MismatchTIC = tic; end
         mm = evalMismatch(sets,V,delta,T,Y,bus,branch);
+        if timing, runtime.MM = runtime.MM + toc(MismatchTIC); end
         
         % Display Mismatches
 		if (verbose)
@@ -366,6 +401,7 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
         end
                 
 		% Calculate maximum error / perform update
+        if timing, UpdateTIC = tic; end
 		err = norm(mm, inf);
         if ( err <= tol )
             if (verbose)
@@ -381,9 +417,11 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
 %            V(sets.V)         = V(sets.V) + JQ \ mm((N-1)+(1:M));
 %            T(sets.T)         = T(sets.T) + JH \ mm((N-1+M)+(1:R));
         end
+        if timing, runtime.Update = runtime.Update + toc(UpdateTIC); end
 
         % Update resistances using new temperatures
         % (Only needs to occur for temperature-dependant branches)
+        if timing, TempTIC = tic; end
         branch.T(sets.T) = T(sets.T);
         branch.R(sets.T) = branch.R_ref(sets.T) .* ...
             ( (branch.T(sets.T) + branch.T_f(sets.T)) ./ ...
@@ -392,6 +430,7 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
             (branch.R(sets.T).^2 + branch.X(sets.T).^2);
         branch.b(sets.T) = -branch.X(sets.T) ./ ...
             (branch.R(sets.T).^2 + branch.X(sets.T).^2);
+        if timing, runtime.Temp = runtime.Temp + toc(TempTIC); end
         
 		% Increment iteration
 		iter = iter + 1;
@@ -437,6 +476,43 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
                         max( abs( hist.mismatches.Q ) ); ...
                         max( abs( hist.mismatches.H ) ) ...
                         ] );
+    end
+    
+    % Display timings
+    if timing
+        % Final
+        runtime.Total = toc(TotalTIC);
+        runtime.Overhead = runtime.Total - runtime.Setup - runtime.YBus ...
+            - runtime.Jacobian - runtime.Update - runtime.MM ...
+            - runtime.Temp;
+        
+        % Display
+        disp( '---Run Time---' );
+        fprintf(1, '%0d FD-TDPF Iterations\n', iter);
+        fprintf(1, 'Setup:                  \t%9.3f ms\t(%0.2f%%)\n', ...
+            runtime.Setup * 1000, ...
+            100 * runtime.Setup / runtime.Total );
+        fprintf(1, 'Calculating Y Bus:      \t%9.3f ms\t(%0.2f%%)\n', ...
+            runtime.YBus * 1000, ...
+            100 * runtime.YBus / runtime.Total );
+        fprintf(1, 'Calculating Jacobian:   \t%9.3f ms\t(%0.2f%%)\n', ...
+            runtime.Jacobian * 1000, ...
+            100 * runtime.Jacobian / runtime.Total );
+        fprintf(1, 'Calculating Mismatches: \t%9.3f ms\t(%0.2f%%)\n', ...
+            runtime.MM * 1000, ...
+            100 * runtime.MM / runtime.Total );
+        fprintf(1, 'Calculating Updates:    \t%9.3f ms\t(%0.2f%%)\n', ...
+            runtime.Update * 1000, ...
+            100 * runtime.Update / runtime.Total );
+        fprintf(1, 'Updating Temperatures:  \t%9.3f ms\t(%0.2f%%)\n', ...
+            runtime.Temp * 1000, ...
+            100 * runtime.Temp / runtime.Total );
+        fprintf(1, 'Overhead:               \t%9.3f ms\t(%0.2f%%)\n', ...
+            runtime.Overhead * 1000, ...
+            100 * runtime.Overhead / runtime.Total );
+        fprintf(1, 'TOTAL:                  \t%9.3f ms\t(%0.2f%%)\n', ...
+            runtime.Total * 1000, ...
+            100 * runtime.Total / runtime.Total );
     end
     
 end	% End Function
