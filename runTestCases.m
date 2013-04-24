@@ -1,48 +1,38 @@
 %% Run Test Cases
-% This test includes a representation of the New England transmission
-% system.
+% This script executes the test cases presented in the paper.
 clear all; close all; clc
 
-%% Script Options
-% Choose one of the test cases below
+% NOTE: MATPOWER must be installed and in MATLAB's path.
+% To add MATPOWER to your path, execute the MATLAB command
+% >> addpath('C:\PATH\TO\MATPOWER');
 
-% Case 30
-% IEEE 30 bus test system
+%% Select Test Case
+% Choose one of the MATPOWER test cases below.
+
+% Case 30 - IEEE 30 bus test system
 casename = 'case30';
 
-% Case 39
-% This test includes a representation of the New England transmission
-% system.
+% Case 39 - A small representation of the New England transmission system
 %casename = 'case39';
 
-% Case 2383wp
-% Power flow data for Polish system - winter 1999-2000 peak.
+% Case 2383wp - Power flow data for Polish system: winter 1999-2000 peak
 %casename = 'case2383wp';
 
-% Case 2736sp
-% Power flow data for Polish system - summer 2004 peak.
+% Case 2736sp - Power flow data for Polish system: summer 2004 peak
 %casename = 'case2736sp';
 
-%
-% Options:
-%
+%% Script Options
 % Only do temperature calcs on the top 5% of lines (by loading)
 tempCalcsMostLoaded = false;
 
 % Initialize TDPF to solved PF - use for larger systems
 initTDPFtoPF = false;
 
-
 %% Import Case Information
-% Import MATPOWER test case (needs MATPOWER in the path) and check for
-% open lines.
-% 
-% To add MATPOWER to your path, do
-%   addpath('C:\PATH\TO\MATPOWER');
-%   addpath('C:\PATH\TO\MATPOWER\t');
+% Import MATPOWER test case and check for open lines.
 casedata = loadcase(casename);      
 
-% Convert casedata to our format
+% Convert casedata to TDPF format
 [bus, branch, SBase, TBase] = importCaseData(casename,'MATPOWER');
 
 %% More Setup
@@ -51,10 +41,10 @@ if initTDPFtoPF
     [~, ~, bus, branch] = PF(bus, branch);
 end
 
-% Which branches are temp-dependent?
+% If applicable, subset temperature calculations to most loaded lines
 if tempCalcsMostLoaded
-    % Get rid of temp calcs on lower 95% of lines that have finite
-    % thermal resistance
+    % Gets rid of temp calcs on lower 95% of lines that have finite
+    % thermal resistance...
     
     % Run a standard LF to determine line loadings
     [~, ~, ~, branch2, hist] = ...
@@ -82,11 +72,6 @@ compTable = {'PF'; 'FD-PF'; 'FC-TDPF'; 'PD-TDPF'; 'FD-TDPF'; 'SD-TDPF'};
 
 % History cell array
 history = cell(6, 1);
-
-% All of the following now properly count iteration 0 as the initial
-% conditions and increment thereafter on each update of the state
-% variables, whether it is partial or complete. (I changed the algorithm
-% code to fix the discrepancies. -SF)
 
 % Conventional Power Flow
 [~, ~, ~, ~, history{1}] = PF(bus, branch, 'history', true);
@@ -129,7 +114,8 @@ xlabel('Iteration');
 ylabel('Largest Mismatch (log)');
 xlim([0 20]);   % Truncate FD_TDPF for readability
 
-%% Save results
+
+%% Save Results
 % Maximum length
 maxlen = 1;
 for i = 1:6
@@ -157,12 +143,12 @@ end
 %	FD-TDPF
 %	SD-TDPF
 if tempCalcsMostLoaded
-    csvwrite([casename ' - 95th pct lines.csv'], allerr)
+    csvwrite([casename ' - 95th Pct Lines.csv'], allerr)
 else
-    csvwrite([casename ' - all lines.csv'], allerr)
+    csvwrite([casename ' - All Lines.csv'], allerr)
 end
 
-%% Maximum Errors of Various Sorts
+%% Display Maximum Errors of Various Sorts
 % Compute results for PF vs. TDPF (using FC_TDPF)
 [V1, delta1, bus1, branch1, hist] = ...
     PF(bus, branch, 'history', true, 'lineLoad', true);
@@ -300,7 +286,7 @@ for i = 1:6
 end
 
 
-%% Display
+%% Display Timings
 % Add in a header row
 compTable(2:end+1, :) = compTable;
 compTable(1,:) = {'Algorithm' 'Iterations' 'Exe Time (sec)' ...
