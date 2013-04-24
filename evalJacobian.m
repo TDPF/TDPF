@@ -4,21 +4,21 @@
 % performed, as specified by the user when the function is called.
 % 
 % SYNTAX:
-%   J = evalJacobian(type,Sets,V,delta,T,G,B,branches)
+%   J = evalJacobian(type,sets,V,delta,T,G,B,branches)
 %
 % INPUTS:
 %   type =      Indicates type of Jacobian(s) to return, based on type of
 %               TDPF being performed. Options are:
 %               1 -- Jacobian matrix for fully-coupled TDPF (FC-TDPF)
-%               2 -- Jacobian submatrices J1-J4 and J9 for
+%               2 -- Jacobian submatrices J11-J22 and J33 for
 %                    partially-decoupled TDPF (PD-TDPF)
-%               3 -- Jacobian submatrices J1, J4, and J9 for
+%               3 -- Jacobian submatrices J11, J22, and J33 for
 %                    fast-decoupled TDPF (FD-TDPF)
-%               4 -- Jacobian matrix for conventional power flow (J1-J4);
+%               4 -- Jacobian matrix for conventional power flow (J11-J22);
 %                    needed for conventional power flow or for
 %                    sequentially decoupled TDPF (SD-TDPF)
-%               5 -- Jacobian submatrices J1 and J4 for conventional fast-
-%                    decoupled power flow
+%               5 -- Jacobian submatrices J11 and J22 for conventional
+%                    fast-decoupled power flow
 %   sets =      Structure giving the bus/branch sets required to
 %               compute the dimensions and entries of the Jacobian
 %               submatrices. Must have the following elements:
@@ -51,21 +51,34 @@
 %   J =         Jacobian matrix (or matrices) with structure dependent on
 %               the input variable 'type' as follows:
 %               1 -- J is a single matrix representing the entire Jacobian
-%                    J1-J9 for use with FC-TDPF
+%                    J11-J33 for use with FC-TDPF
 %               2 -- J is a cell structure containing two Jacobian
-%                    submatrices: J1-J4 and J9 (in that order).
+%                    submatrices: J11-J22 and J33 (in that order).
 %                    For use with PD-TDPF.
 %               3 -- J is a cell structure containing three Jacobian
-%                    submatrices: J1, J4 and J9 (in that order).
+%                    submatrices: J11, J22 and J33 (in that order).
 %                    For use with FD-TDPF.
-%               4 -- J is single matrix representing the Jacobian J1-J4
-%                    for conventional power flow. For use with conventional
-%                    power flow or SD-TDPF.
+%               4 -- J is single matrix representing the Jacobian J11-J22
+%                    for conventional power flow.
+%                    For use with conventional power flow or SD-TDPF.
 %               5 -- J is a cell structure containing two Jacobian
-%                    submatrices: J1 and J4 (in that order).
+%                    submatrices: J11 and J22 (in that order).
 %               	 For use with fast-decoupled power flow.
 %
 % COMMENTS:
+%   1. The Jacobian matrices are numbered here as in the paper:
+%      / J11 = dP/dd     J12 = dP/dV     J13 = dP/dT \
+%      | (N-1)x(N-1)     (N-1)x(M)       (N-1)x(R)   |
+%      |                                             |
+%      | J21 = dQ/dd     J22 = dQ/dV     J23 = dQ/dT |
+%      | (M)x(N-1)       (M)x(M)         (M)x(R)     |
+%      |                                             |
+%      | J31 = dH/dd     J32 = dH/dV     J33 = dH/dT |
+%      \ (R)x(N-1)       (R)x(M)         (R)x(R)     /
+%
+%      N = Number of buses
+%      M = Number of PQ buses
+%      R = Number temperature-dependent branches
 %
 % LICENSE:
 %   This file is part of the Temperature Dependent Power Flow (TDPF) script
@@ -93,8 +106,8 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
     R = length(sets.T);     % Number of temperature-dependent branches
 
     %% Compute some necessary quantities for branch elements
-    % (Required for all cases except type==4)
-    if type ~= 4
+    % (Required for all cases except type==4 and type==5)
+    if (type ~= 4) && (type ~= 5)
        % Compute series admittance of branch elements
        branch.g = branch.R ./ (branch.R.^2 + branch.X.^2);
        branch.b = -branch.X ./ (branch.R.^2 + branch.X.^2);
@@ -132,35 +145,22 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
     %% Compute Jacobian submatrices
     % (Each is evaluated only if needed)
     
-    % The full Jacobian matrix is as follows:
-    %
-    % / J1 = dP/dd      J2 = dP/dV      J7 = dP/dT  \
-    % | (N-1)x(N-1)     (N-1)x(M)       (N-1)x(R)   |
-    % |                                             |
-    % | J3 = dQ/dd      J4 = dQ/dV      J8 = dQ/dT  |
-    % | (M)x(N-1)       (M)x(M)         (M)x(R)     |
-    % |                                             |
-    % | J5 = dH/dd      J6 = dH/dV      J9 = dH/dT  |
-    % \ (R)x(N-1)       (R)x(M)         (R)x(R)     /
-    %
-    % (We may want to renumber later...)
-    
-    % J1 = dP/dd    (N-1) x (N-1)
+    % J11 = dP/dd    (N-1) x (N-1)
     % Needed for all types
         % Find indices of all nonzero YBus elements + diagonals where:
         %   The row    exists in sets.P
         %   The column exists in sets.delta
         [jRow, jCol]  = find( nzY( sets.P, sets.delta ) );
         
-        % NOTE: The indexing is now relative to J1 rather than YBus. This
+        % NOTE: The indexing is now relative to J11 rather than YBus. This
         % is important when translating back to V and delta values!
         
-        % Storage for J1 elements
+        % Storage for J11 elements
         jElem = zeros( size(jRow) );
         
-        % Generate each nonzero element of J1
+        % Generate each nonzero element of J11
         for count = 1:length(jRow)
-            % Find indices with respect to J1
+            % Find indices with respect to J11
             ii = jRow(count);
             kk = jCol(count);
             
@@ -184,26 +184,26 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
             end
         end
         
-        % Generate J1
-        J1 = sparse(jRow, jCol, jElem, N-1, N-1);
+        % Generate J11
+        J11 = sparse(jRow, jCol, jElem, N-1, N-1);
     
     
-    % J2 = dP/dV    (N-1) x (M)
+    % J12 = dP/dV    (N-1) x (M)
     if any( type == [1 2 4] )
         % Find indices of all nonzero YBus elements + diagonals where:
         %   The row    exists in sets.P
         %   The column exists in sets.V
         [jRow, jCol]  = find( nzY( sets.P, sets.V ) );
         
-        % NOTE: The indexing is now relative to J2 rather than YBus. This
+        % NOTE: The indexing is now relative to J12 rather than YBus. This
         % is important when translating back to V and delta values!
         
-        % Storage for J2 elements
+        % Storage for J12 elements
         jElem = zeros( size(jRow) );
         
-        % Generate each nonzero element of J2
+        % Generate each nonzero element of J12
         for count = 1:length(jRow)
-            % Find indices with respect to J2
+            % Find indices with respect to J12
             ii = jRow(count);
             kk = jCol(count);
             
@@ -226,27 +226,27 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
             end
         end
         
-        % Generate J1
-        J2 = sparse(jRow, jCol, jElem, N-1, M);
+        % Generate J12
+        J12 = sparse(jRow, jCol, jElem, N-1, M);
     end
     
     
-    % J3 = dQ/dd    (M) x (N-1)
+    % J21 = dQ/dd    (M) x (N-1)
     if any( type == [1 2 4] )
         % Find indices of all nonzero YBus elements + diagonals where:
         %   The row    exists in sets.Q
         %   The column exists in sets.delta
         [jRow, jCol]  = find( nzY( sets.Q, sets.delta ) );
         
-        % NOTE: The indexing is now relative to J3 rather than YBus. This
+        % NOTE: The indexing is now relative to J21 rather than YBus. This
         % is important when translating back to V and delta values!
         
-        % Storage for J3 elements
+        % Storage for J21 elements
         jElem = zeros( size(jRow) );
         
-        % Generate each nonzero element of J3
+        % Generate each nonzero element of J21
         for count = 1:length(jRow)
-            % Find indices with respect to J3
+            % Find indices with respect to J21
             ii = jRow(count);
             kk = jCol(count);
             
@@ -270,27 +270,27 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
             end
         end
         
-        % Generate J3
-        J3 = sparse(jRow, jCol, jElem, M, N-1);
+        % Generate J21
+        J21 = sparse(jRow, jCol, jElem, M, N-1);
     end
     
     
-    % J4 = dQ/dV	(M) x (M)
+    % J22 = dQ/dV	(M) x (M)
     % Needed for all types
         % Find indices of all nonzero YBus elements + diagonals where:
         %   The row    exists in sets.Q
         %   The column exists in sets.V
         [jRow, jCol]  = find( nzY( sets.Q, sets.V ) );
         
-        % NOTE: The indexing is now relative to J4 rather than YBus. This
+        % NOTE: The indexing is now relative to J22 rather than YBus. This
         % is important when translating back to V and delta values!
         
-        % Storage for J4 elements
+        % Storage for J22 elements
         jElem = zeros( size(jRow) );
         
-        % Generate each nonzero element of J4
+        % Generate each nonzero element of J22
         for count = 1:length(jRow)
-            % Find indices with respect to J4
+            % Find indices with respect to J22
             ii = jRow(count);
             kk = jCol(count);
             
@@ -313,25 +313,25 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
             end
         end
         
-        % Generate J4
-        J4 = sparse(jRow, jCol, jElem, M, M);
+        % Generate J22
+        J22 = sparse(jRow, jCol, jElem, M, M);
     
     
-    % J5 = dH/dd    (R) x (N-1)
+    % J31 = dH/dd    (R) x (N-1)
     if type == 1
         % Find indices of all nonzero branch-to-bus connections where
         %   The row    exists in sets.H
         %   The column exists in sets.delta
         [jRow, jCol]  = find( nzL( sets.H, sets.delta ) );
         
-        % NOTE: The indexing is now relative to J5.
+        % NOTE: The indexing is now relative to J31.
         
-        % Storage for J5 elements
+        % Storage for J31 elements
         jElem = zeros( size(jRow) );
         
-        % Generate each nonzero element of J5
+        % Generate each nonzero element of J31
         for count = 1:length(jRow)
-            % Find indices with respect to J5
+            % Find indices with respect to J31
             ii = jRow(count);       % Branch-related
             kk = jCol(count);       % Bus-related
             
@@ -365,26 +365,26 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
             end
         end
         
-        % Generate J5
-        J5 = sparse(jRow, jCol, jElem, R, N-1);
+        % Generate J31
+        J31 = sparse(jRow, jCol, jElem, R, N-1);
     end
     
     
-    % J6 = dH/dV    (R) x (M)
+    % J32 = dH/dV    (R) x (M)
     if type == 1
         % Find indices of all nonzero branch-to-bus connections where
         %   The row    exists in sets.H
         %   The column exists in sets.V
         [jRow, jCol]  = find( nzL( sets.H, sets.V ) );
         
-        % NOTE: The indexing is now relative to J6.
+        % NOTE: The indexing is now relative to J32.
         
-        % Storage for J6 elements
+        % Storage for J32 elements
         jElem = zeros( size(jRow) );
         
-        % Generate each nonzero element of J6
+        % Generate each nonzero element of J32
         for count = 1:length(jRow)
-            % Find indices with respect to J6
+            % Find indices with respect to J32
             ii = jRow(count);       % Branch-related
             kk = jCol(count);       % Bus-related
             
@@ -418,11 +418,11 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
             end
         end
         
-        % Generate J6
-        J6 = sparse(jRow, jCol, jElem, R, M);
+        % Generate J32
+        J32 = sparse(jRow, jCol, jElem, R, M);
     end
     
-    % J7 = dP/dT    (N-1) x (R)
+    % J13 = dP/dT    (N-1) x (R)
     if type == 1
         % Find indices of all nonzero bus-to-branch connections where
         %   The row    exists in sets.P
@@ -430,14 +430,14 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
         % Note that this requires using the transpose of nzL
         [jRow, jCol]  = find( nzL( sets.T, sets.P )' );
         
-        % NOTE: The indexing is now relative to J7.
+        % NOTE: The indexing is now relative to J13.
         
-        % Storage for J7 elements
+        % Storage for J13 elements
         jElem = zeros( size(jRow) );
         
-        % Generate each nonzero element of J7
+        % Generate each nonzero element of J13
         for count = 1:length(jRow)
-            % Find indices with respect to J7
+            % Find indices with respect to J13
             ii = jRow(count);       % Bus-related
             kk = jCol(count);       % Branch-related
             
@@ -494,11 +494,11 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
             end
         end
         
-        % Generate J7
-        J7 = sparse(jRow, jCol, jElem, N-1, R);
+        % Generate J13
+        J13 = sparse(jRow, jCol, jElem, N-1, R);
     end
     
-    % J8 = dQ/dT    (M) x (R)
+    % J23 = dQ/dT    (M) x (R)
     if type == 1
         % Find indices of all nonzero bus-to-branch connections where
         %   The row    exists in sets.Q
@@ -506,14 +506,14 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
         % Note that this requires using the transpose of nzL
         [jRow, jCol]  = find( nzL( sets.T, sets.Q )' );
         
-        % NOTE: The indexing is now relative to J8.
+        % NOTE: The indexing is now relative to J23.
         
-        % Storage for J8 elements
+        % Storage for J23 elements
         jElem = zeros( size(jRow) );
         
-        % Generate each nonzero element of J8
+        % Generate each nonzero element of J23
         for count = 1:length(jRow)
-            % Find indices with respect to J8
+            % Find indices with respect to J23
             ii = jRow(count);       % Bus-related
             kk = jCol(count);       % Branch-related
             
@@ -570,19 +570,19 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
             end
         end
         
-        % Generate J8
-        J8 = sparse(jRow, jCol, jElem, M, R);
+        % Generate J23
+        J23 = sparse(jRow, jCol, jElem, M, R);
     end
     
     
-    % J9 = dH/dT    (R) x (R)
+    % J33 = dH/dT    (R) x (R)
     if any( type == [1 2] )
-        % Row, column, and element vectors for J9
-        % NOTE: J9 has only diagonal entries
+        % Row, column, and element vectors for J33
+        % NOTE: J33 has only diagonal entries
         jRow = 1:R; jCol = 1:R;
         jElem = zeros( size(jRow) );
         
-        % Generate elements of J9
+        % Generate elements of J33
         for kk = 1:R
             % Indices
             kn = sets.T(kk);
@@ -610,25 +610,25 @@ function J = evalJacobian(type,sets,V,delta,T,G,B,branch)
                           2 * Vk * Vn * cos(deltak - deltan) ) * dgdT;
         end
         
-        % Generate J9
-        J9 = sparse(jRow, jCol, jElem, R, R);
+        % Generate J33
+        J33 = sparse(jRow, jCol, jElem, R, R);
     elseif type == 3
-        % For FD-TDPF, J9 is approximated by the identity matrix
-        J9 = speye(R);
+        % For FD-TDPF, J33 is approximated by the identity matrix
+        J33 = speye(R);
     end
         
     %% Return Type-Dependent Output
     switch type
         case 1  % FC-TDPF
-            J = [J1 J2 J7; J3 J4 J8; J5 J6 J9];
+            J = [J11 J12 J13; J21 J22 J23; J31 J32 J33];
         case 2  % PD-TDPF
-            J = {[J1 J2; J3 J4],J9};
+            J = {[J11 J12; J21 J22],J33};
         case 3  % FD-TDPF
-            J = {J1,J4,J9};
+            J = {J11,J22,J33};
         case 4  % Conventional PF or SD-TDPF
-            J = [J1 J2; J3 J4];
+            J = [J11 J12; J21 J22];
         case 5  % Fast-decoupled conventional PF
-            J = {J1,J4};
+            J = {J11,J22};
         otherwise
             error('Unrecognized Jacobian type.');
     end

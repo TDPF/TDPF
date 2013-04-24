@@ -289,12 +289,12 @@ function [V,delta,T,bus,branch,hist] = FD_TDPF(bus,branch,varargin)
     % Jacobian matrices are computed and inverted only once.
     if timing, JacobTIC = tic; end
     J = evalJacobian(3,sets,V,delta,T,G,B,branch);
-    invJP = inv(J{1});      % J1 inverse
-    invJQ = inv(J{2});      % J4 inverse
-    invJH = inv(J{3});      % J9 inverse
-%    JP = J{1};              % J1
-%    JQ = J{2};              % J4
-%    JH = J{3};              % J9
+    invJP = inv(J{1});      % J11 inverse
+    invJQ = inv(J{2});      % J22 inverse
+    invJH = inv(J{3});      % J33 inverse
+%    JP = J{1};              % J11
+%    JQ = J{2};              % J22
+%    JH = J{3};              % J33
     if timing, runtime.Jacobian = runtime.Jacobian + toc(JacobTIC); end
 
     % Note: There are two possible ways to handle the matrix inversions in

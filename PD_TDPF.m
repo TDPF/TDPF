@@ -369,8 +369,8 @@ function [V,delta,T,bus,branch,hist] = PD_TDPF(bus,branch,varargin)
         % Evaluate Jacobian matrices
         if timing, JacobTIC = tic; end
         J = evalJacobian(2,sets,V,delta,T,G,B,branch);
-        JPQ = J{1};  % J1 - J4
-        JH = J{2};  % J9
+        JPQ = J{1};  % J11 - J22
+        JH = J{2};   % J33
         if timing, runtime.Jacobian = runtime.Jacobian + toc(JacobTIC); end
 
         % Evaluate mismatches

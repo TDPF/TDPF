@@ -340,8 +340,8 @@ function [V,delta,bus,branch,hist] = PF(bus,branch,varargin)
         % Jacobian matrices are computed and inverted only once.
         if timing, JacobTIC = tic; end
         J = evalJacobian(5,sets,V,delta,[],G,B,branch);
-        JP = J{1};              % J1
-        JQ = J{2};              % J4
+        JP = J{1};              % J11
+        JQ = J{2};              % J22
         if timing, runtime.Jacobian = runtime.Jacobian + toc(JacobTIC); end
         
         iter = 0;			% Iteration counter
