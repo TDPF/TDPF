@@ -1,5 +1,5 @@
 # TDPF #
-**T**emperature-**D**ependent **P**ower **F**low implemented in MATLAB
+**T**emperature- **D**ependent **P**ower **F**low implemented in MATLAB
 Copyright (C) 2013  Stephen Frank, Jason Sexauer, and Salman Mohagheghi
 
 ## What Is TDPF? ##
