@@ -100,7 +100,7 @@ function [V,delta,bus,branch,hist] = PF(bus,branch,varargin)
     %% Setup	
     % Default control parameters
 	tol = 1e-08;		% PQH mismatch tolerance
-	maxIter = 30;		% Maximum number of iterations
+	maxIter = [];		% Maximum number of iterations (set later)
 	verbose = false;	% Set to TRUE to spit out a bunch of diagnostics
     timing = false;     % Set to TRUE to display timing info
     history = false;    % Set to TRUE to save and return iteration history
@@ -154,7 +154,16 @@ function [V,delta,bus,branch,hist] = PF(bus,branch,varargin)
 		
 		% Clear these two entries
 		varargin(1:2) = [];
-	end
+    end
+    
+    % Set default maximum iterations based on power flow type
+    if isempty(maxIter)
+        if fastDecoupled
+            maxIter = 100;
+        else
+            maxIter = 30;
+        end
+    end
     
     % Storage structure for history (unused if 'history' == FALSE)
     hist = struct;
