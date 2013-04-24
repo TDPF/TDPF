@@ -77,11 +77,30 @@
 %   3. Verbose mode turns on all kinds of reporting and is useful for
 %      troubleshooting. Enabling timing mode will calculate and display
 %      timing information for various algorithm tasks.
+%
+% LICENSE:
+%   This file is part of the Temperature Dependent Power Flow (TDPF) script
+%   collection for MATLAB: see http://github.com/TDPF/TDPF.
+%   
+%   TDPF is free software: you may redistribute it and/or modify it under
+%   the terms of the GNU General Public License (GPL) as published by the
+%   Free Software Foundation, either version 3 of the License, or (at your
+%   option) any later version.
+%   
+%   This program is distributed in the hope that it will be useful, but
+%   WITHOUT ANY WARRANTY; without even the implied warranty of
+%   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+%   General Public License for more details.
+%   
+%   Text and HTML copies of the GNU General Public License should be
+%   distributed with these scripts in the files 'gpl-3.0.txt' and
+%   'gpl-3.0.html'. If not, plase visit <http://www.gnu.org/licenses/>
+%
 function [V,delta,bus,branch,hist] = PF(bus,branch,varargin)
     %% Setup	
     % Default control parameters
 	tol = 1e-08;		% PQH mismatch tolerance
-	maxIter = 30;		% Maximum number of iterations
+	maxIter = [];		% Maximum number of iterations (set later)
 	verbose = false;	% Set to TRUE to spit out a bunch of diagnostics
     timing = false;     % Set to TRUE to display timing info
     history = false;    % Set to TRUE to save and return iteration history
@@ -135,7 +154,16 @@ function [V,delta,bus,branch,hist] = PF(bus,branch,varargin)
 		
 		% Clear these two entries
 		varargin(1:2) = [];
-	end
+    end
+    
+    % Set default maximum iterations based on power flow type
+    if isempty(maxIter)
+        if fastDecoupled
+            maxIter = 100;
+        else
+            maxIter = 30;
+        end
+    end
     
     % Storage structure for history (unused if 'history' == FALSE)
     hist = struct;
@@ -321,8 +349,8 @@ function [V,delta,bus,branch,hist] = PF(bus,branch,varargin)
         % Jacobian matrices are computed and inverted only once.
         if timing, JacobTIC = tic; end
         J = evalJacobian(5,sets,V,delta,[],G,B,branch);
-        JP = J{1};              % J1
-        JQ = J{2};              % J4
+        JP = J{1};              % J11
+        JQ = J{2};              % J22
         if timing, runtime.Jacobian = runtime.Jacobian + toc(JacobTIC); end
         
         iter = 0;			% Iteration counter

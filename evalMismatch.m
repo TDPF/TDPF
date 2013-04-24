@@ -46,6 +46,24 @@
 %
 % COMMENTS:
 %
+% LICENSE:
+%   This file is part of the Temperature Dependent Power Flow (TDPF) script
+%   collection for MATLAB: see http://github.com/TDPF/TDPF.
+%   
+%   TDPF is free software: you may redistribute it and/or modify it under
+%   the terms of the GNU General Public License (GPL) as published by the
+%   Free Software Foundation, either version 3 of the License, or (at your
+%   option) any later version.
+%   
+%   This program is distributed in the hope that it will be useful, but
+%   WITHOUT ANY WARRANTY; without even the implied warranty of
+%   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+%   General Public License for more details.
+%   
+%   Text and HTML copies of the GNU General Public License should be
+%   distributed with these scripts in the files 'gpl-3.0.txt' and
+%   'gpl-3.0.html'. If not, plase visit <http://www.gnu.org/licenses/>
+%
 function mm = evalMismatch(sets,V,delta,T,Y,bus,branch)
     %% Compute required vector/matrix dimensions
     N = length(V);          % Total number of buses

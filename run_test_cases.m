@@ -1,48 +1,38 @@
 %% Run Test Cases
-% This test includes a representation of the New England transmission
-% system.
+% This script executes the test cases presented in the paper.
 clear all; close all; clc
 
-%% Script Options
-% Choose one of the test cases below
+% NOTE: MATPOWER must be installed and in MATLAB's path.
+% To add MATPOWER to your path, execute the MATLAB command
+% >> addpath('C:\PATH\TO\MATPOWER');
 
-% Case 30
-% IEEE 30 bus test system
-casename = 'case30';
+%% Select Test Case
+% Choose one of the MATPOWER test cases below.
 
-% Case 39
-% This test includes a representation of the New England transmission
-% system.
-%casename = 'case39';
+% Case 30 - IEEE 30 bus test system
+%casename = 'case30';
 
-% Case 2383wp
-% Power flow data for Polish system - winter 1999-2000 peak.
+% Case 39 - A small representation of the New England transmission system
+casename = 'case39';
+
+% Case 2383wp - Power flow data for Polish system: winter 1999-2000 peak
 %casename = 'case2383wp';
 
-% Case 2736sp
-% Power flow data for Polish system - summer 2004 peak.
+% Case 2736sp - Power flow data for Polish system: summer 2004 peak
 %casename = 'case2736sp';
 
-%
-% Options:
-%
+%% Script Options
 % Only do temperature calcs on the top 5% of lines (by loading)
 tempCalcsMostLoaded = false;
 
 % Initialize TDPF to solved PF - use for larger systems
-initTDPFtoPF = false;
-
+initTDPFtoPF = true;
 
 %% Import Case Information
-% Import MATPOWER test case (needs MATPOWER in the path) and check for
-% open lines.
-% 
-% To add MATPOWER to your path, do
-%   addpath('C:\PATH\TO\MATPOWER');
-%   addpath('C:\PATH\TO\MATPOWER\t');
+% Import MATPOWER test case and check for open lines.
 casedata = loadcase(casename);      
 
-% Convert casedata to our format
+% Convert casedata to TDPF format
 [bus, branch, SBase, TBase] = importCaseData(casename,'MATPOWER');
 
 %% More Setup
@@ -51,10 +41,10 @@ if initTDPFtoPF
     [~, ~, bus, branch] = PF(bus, branch);
 end
 
-% Which branches are temp-dependent?
+% If applicable, subset temperature calculations to most loaded lines
 if tempCalcsMostLoaded
-    % Get rid of temp calcs on lower 95% of lines that have finite
-    % thermal resistance
+    % Gets rid of temp calcs on lower 95% of lines that have finite
+    % thermal resistance...
     
     % Run a standard LF to determine line loadings
     [~, ~, ~, branch2, hist] = ...
@@ -82,11 +72,6 @@ compTable = {'PF'; 'FD-PF'; 'FC-TDPF'; 'PD-TDPF'; 'FD-TDPF'; 'SD-TDPF'};
 
 % History cell array
 history = cell(6, 1);
-
-% All of the following now properly count iteration 0 as the initial
-% conditions and increment thereafter on each update of the state
-% variables, whether it is partial or complete. (I changed the algorithm
-% code to fix the discrepancies. -SF)
 
 % Conventional Power Flow
 [~, ~, ~, ~, history{1}] = PF(bus, branch, 'history', true);
@@ -129,7 +114,8 @@ xlabel('Iteration');
 ylabel('Largest Mismatch (log)');
 xlim([0 20]);   % Truncate FD_TDPF for readability
 
-%% Save results
+
+%% Save Results
 % Maximum length
 maxlen = 1;
 for i = 1:6
@@ -157,12 +143,12 @@ end
 %	FD-TDPF
 %	SD-TDPF
 if tempCalcsMostLoaded
-    csvwrite([casename ' - 95th pct lines.csv'], allerr)
+    csvwrite([casename ' - 95th Pct Lines.csv'], allerr)
 else
-    csvwrite([casename ' - all lines.csv'], allerr)
+    csvwrite([casename ' - All Lines.csv'], allerr)
 end
 
-%% Maximum Errors of Various Sorts
+%% Display Maximum Errors of Various Sorts
 % Compute results for PF vs. TDPF (using FC_TDPF)
 [V1, delta1, bus1, branch1, hist] = ...
     PF(bus, branch, 'history', true, 'lineLoad', true);
@@ -189,40 +175,62 @@ norm(Rdiff,Inf)                         % Absolute
 norm(Rdiff(abs(branch1.R) > eps) ./ ...	% Pct. Relative to conventional PF
     branch1.R(abs(branch1.R) > eps),Inf)*100 
 
-% Compute line loss
-V1p = V1 .* exp(1j.*delta1.*pi./180);
-V2p = V2 .* exp(1j.*delta2.*pi./180);
-lineloss1 = zeros(size(V1));
-lineloss2 = zeros(size(V2));
-for ik = 1:length(branch.id)
-    % Branch 1 loss
-    % Get appropriate indices
-    i = branch1.from(ik);
-    k = branch1.to(ik);
+% Compute branch losses
+    % Phasor voltages
+    V1p = V1 .* exp(1j.*delta1.*pi./180);
+    V2p = V2 .* exp(1j.*delta2.*pi./180);
     
-    y1 = 1 / (branch1.R(ik) + 1j*branch1.X(ik));
-    lineloss1(ik) = real( ...
-        V1p(i) * conj(y1 * (V1p(i) - V1p(k))) + ...
-        V1p(k) * conj(y1 * (V1p(k) - V1p(i))) ...
-        );
+    % Branch loss vectors
+    branchloss1 = zeros(size(branch1.id));
+    branchloss2 = zeros(size(branch2.id));
     
-    % Branch 2 loss
-    % Get appropriate indices
-    i = branch2.from(ik);
-    k = branch2.to(ik);
+    % Branch losses - conventional PF
+    for ik = 1:length(branch1.id)
+        % Branch indices
+        i = branch1.from(ik);
+        k = branch1.to(ik);
+        
+        % From and To voltages - reflected to branch secondary
+        Vf = V1p(i) / branch1.tap(ik);
+        Vt = V1p(k);
+        
+        % Branch admittance
+        y = 1 / (branch1.R(ik) + 1j*branch1.X(ik));
+        
+        % Loss
+        branchloss1(ik) = real( ...
+            Vf * conj(y * (Vf - Vt)) + ...
+            Vt * conj(y * (Vt - Vf)) ...
+            );
+    end
     
-    y2 = 1 / (branch2.R(ik) + 1j*branch2.X(ik));
-    lineloss2(ik) = real( ...
-        V2p(i) * conj(y2 * (V2p(i) - V2p(k))) + ...
-        V2p(k) * conj(y2 * (V2p(k) - V2p(i))) ...
-        );
-end
-lineloss1( lineloss1 < 10*eps ) = 0;
-lineloss2( lineloss2 < 10*eps ) = 0;
+    % Branch losses - TDPF
+    for ik = 1:length(branch2.id)
+        % Branch indices
+        i = branch2.from(ik);
+        k = branch2.to(ik);
+        
+        % From and To voltages - reflected to branch secondary
+        Vf = V2p(i) / branch2.tap(ik);
+        Vt = V2p(k);
+        
+        % Branch admittance
+        y = 1 / (branch2.R(ik) + 1j*branch2.X(ik));
+        
+        % Loss
+        branchloss2(ik) = real( ...
+            Vf * conj(y * (Vf - Vt)) + ...
+            Vt * conj(y * (Vt - Vf)) ...
+            );
+    end
+    
+    % Near zero -> zero
+    branchloss1( branchloss1 < 10*eps ) = 0;
+    branchloss2( branchloss2 < 10*eps ) = 0;
 
 % Max. difference in line loss: only for lines loaded above 5%
-ll1 = lineloss1( lineLoad > 0.05 );
-ll2 = lineloss2( lineLoad > 0.05 );
+ll1 = branchloss1( lineLoad > 0.05 );
+ll2 = branchloss2( lineLoad > 0.05 );
 lldiff = ll1-ll2;
 norm(lldiff,Inf)                                % Absolute
 norm(lldiff(ll1 > 0) ./ ll1(ll1 > 0),Inf)*100   % Pct. Relative to conventional PF
@@ -300,7 +308,7 @@ for i = 1:6
 end
 
 
-%% Display
+%% Display Timings
 % Add in a header row
 compTable(2:end+1, :) = compTable;
 compTable(1,:) = {'Algorithm' 'Iterations' 'Exe Time (sec)' ...
