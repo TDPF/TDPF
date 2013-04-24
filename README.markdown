@@ -1,15 +1,29 @@
 # TDPF #
-TDPF -- **T**emperature **D**ependent **P**ower **F**low implemented in MATLAB
-
+TDPF -- **T**emperature-**D**ependent **P**ower **F**low implemented in MATLAB
 Copyright (C) 2013  Stephen Frank, Jason Sexauer, and Salman Mohagheghi
 
-TDPF is a proof-of-concept **T**emperature **D**ependent **P**ower **F**low
-algorithm implemented as a collection of self-documenting MATLAB scripts.
+## What Is TDPF? ##
+TDPF is a proof-of-concept Temperature-Dependent Power Flow algorithm implemented as a collection of MATLAB scripts. TDPF augments conventional power flow by integrating an estimate of branch temperatures with the conventional power flow equations. For the technical details, please read:
 
-Authors: Stephen Frank (atdsm), Jason Sexauer (jsexauer), and Salman Mohagheghi
+1.	S. Frank, J. Sexauer, and S. Mohagheghi, "Temperature-dependent power flow," 2013, submitted for publication. Available: [http://files.stevefrank.info/pub/TDPF.pdf](http://files.stevefrank.info/pub/TDPF.pdf "Temperature-Dependent Power Flow by S. Frank, J. Sexauer, and S. Mohagheghi").
 
-## More Info ##
-Work in progress! Come back later.
+## How To Use TDPF ##
+TDPF is implemented as a collection of MATLAB functions:
+
+*	`importCaseData()` -- Import power system data from CSV, [IEEE Common Data Format](http://dx.doi.org/10.1109/TPAS.1973.293571 "Description of IEEE Common Data Format"), or [MATPOWER](http://www.pserc.cornell.edu/matpower/ "MATPOWER Website")
+*	`makeYBus()` -- Create the system admittance matrix for TDPF
+*	`evalJacobian()` -- Evaluate the Jacobian matrix for TDPF
+*	`evalMismatch()` -- Evaluate power and temperature mismatches for TDPF
+*	`PF()` -- Execute a conventional Newton-Raphson or fast decoupled power flow
+*	`FC_TDPF()` -- Execute fully coupled temperature-dependent power flow
+*	`PD_TDPF()` -- Execute partially decoupled temperature-dependent power flow
+*	`FD_TDPF()` -- Execute fast decoupled temperature-dependent power flow
+*	`SD_TDPF()` -- Execute sequentially decoupled temperature-dependent power flow
+
+The `.m' file for each function provides documentation of the function inputs, outputs, and options. The script `tdpf_example.m`, which provides a step-by-step example for executing a temperature dependent power flow for the 39 bus New England test system, is the best place to start.
+
+## Citing TDPF ##
+If you use TDPF in your research, we would appreciate it if you would cite the article referenced above.
 
 ## License ##
 This program is free software: you may redistribute it and/or modify it under the terms of the GNU General Public License (GPL) as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
