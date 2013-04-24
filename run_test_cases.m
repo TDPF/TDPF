@@ -10,10 +10,10 @@ clear all; close all; clc
 % Choose one of the MATPOWER test cases below.
 
 % Case 30 - IEEE 30 bus test system
-casename = 'case30';
+%casename = 'case30';
 
 % Case 39 - A small representation of the New England transmission system
-%casename = 'case39';
+casename = 'case39';
 
 % Case 2383wp - Power flow data for Polish system: winter 1999-2000 peak
 %casename = 'case2383wp';
@@ -26,7 +26,7 @@ casename = 'case30';
 tempCalcsMostLoaded = false;
 
 % Initialize TDPF to solved PF - use for larger systems
-initTDPFtoPF = false;
+initTDPFtoPF = true;
 
 %% Import Case Information
 % Import MATPOWER test case and check for open lines.
@@ -175,40 +175,62 @@ norm(Rdiff,Inf)                         % Absolute
 norm(Rdiff(abs(branch1.R) > eps) ./ ...	% Pct. Relative to conventional PF
     branch1.R(abs(branch1.R) > eps),Inf)*100 
 
-% Compute line loss
-V1p = V1 .* exp(1j.*delta1.*pi./180);
-V2p = V2 .* exp(1j.*delta2.*pi./180);
-lineloss1 = zeros(size(V1));
-lineloss2 = zeros(size(V2));
-for ik = 1:length(branch.id)
-    % Branch 1 loss
-    % Get appropriate indices
-    i = branch1.from(ik);
-    k = branch1.to(ik);
+% Compute branch losses
+    % Phasor voltages
+    V1p = V1 .* exp(1j.*delta1.*pi./180);
+    V2p = V2 .* exp(1j.*delta2.*pi./180);
     
-    y1 = 1 / (branch1.R(ik) + 1j*branch1.X(ik));
-    lineloss1(ik) = real( ...
-        V1p(i) * conj(y1 * (V1p(i) - V1p(k))) + ...
-        V1p(k) * conj(y1 * (V1p(k) - V1p(i))) ...
-        );
+    % Branch loss vectors
+    branchloss1 = zeros(size(branch1.id));
+    branchloss2 = zeros(size(branch2.id));
     
-    % Branch 2 loss
-    % Get appropriate indices
-    i = branch2.from(ik);
-    k = branch2.to(ik);
+    % Branch losses - conventional PF
+    for ik = 1:length(branch1.id)
+        % Branch indices
+        i = branch1.from(ik);
+        k = branch1.to(ik);
+        
+        % From and To voltages - reflected to branch secondary
+        Vf = V1p(i) / branch1.tap(ik);
+        Vt = V1p(k);
+        
+        % Branch admittance
+        y = 1 / (branch1.R(ik) + 1j*branch1.X(ik));
+        
+        % Loss
+        branchloss1(ik) = real( ...
+            Vf * conj(y * (Vf - Vt)) + ...
+            Vt * conj(y * (Vt - Vf)) ...
+            );
+    end
     
-    y2 = 1 / (branch2.R(ik) + 1j*branch2.X(ik));
-    lineloss2(ik) = real( ...
-        V2p(i) * conj(y2 * (V2p(i) - V2p(k))) + ...
-        V2p(k) * conj(y2 * (V2p(k) - V2p(i))) ...
-        );
-end
-lineloss1( lineloss1 < 10*eps ) = 0;
-lineloss2( lineloss2 < 10*eps ) = 0;
+    % Branch losses - TDPF
+    for ik = 1:length(branch2.id)
+        % Branch indices
+        i = branch2.from(ik);
+        k = branch2.to(ik);
+        
+        % From and To voltages - reflected to branch secondary
+        Vf = V2p(i) / branch2.tap(ik);
+        Vt = V2p(k);
+        
+        % Branch admittance
+        y = 1 / (branch2.R(ik) + 1j*branch2.X(ik));
+        
+        % Loss
+        branchloss2(ik) = real( ...
+            Vf * conj(y * (Vf - Vt)) + ...
+            Vt * conj(y * (Vt - Vf)) ...
+            );
+    end
+    
+    % Near zero -> zero
+    branchloss1( branchloss1 < 10*eps ) = 0;
+    branchloss2( branchloss2 < 10*eps ) = 0;
 
 % Max. difference in line loss: only for lines loaded above 5%
-ll1 = lineloss1( lineLoad > 0.05 );
-ll2 = lineloss2( lineLoad > 0.05 );
+ll1 = branchloss1( lineLoad > 0.05 );
+ll2 = branchloss2( lineLoad > 0.05 );
 lldiff = ll1-ll2;
 norm(lldiff,Inf)                                % Absolute
 norm(lldiff(ll1 > 0) ./ ll1(ll1 > 0),Inf)*100   % Pct. Relative to conventional PF
