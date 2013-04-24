@@ -134,7 +134,7 @@ mm = evalMismatch(sets,V,delta,T,Y,bus,branch);
 %       case3375wp      Generates dimension mismatch errors when trying to
 %                       compare MATLAB's solution with ours. (??)
 
-casename = 'case39';        % Set test case here
+casename = 'case30';        % Set test case here
 
 % Case NYISO - outside data source
 % load('test_cases/nyiso_converted.mat');
@@ -144,7 +144,6 @@ casename = 'case39';        % Set test case here
 % 
 % To add MATPOWER to your path, do
 %   addpath('C:\PATH\TO\MATPOWER');
-%   addpath('C:\PATH\TO\MATPOWER\t');
 casedata = loadcase(casename);
 
 % Convert casedata to our format
@@ -293,6 +292,7 @@ disp(' ');
 %% Test of Timing Features
 % Run manually - test timings for each type of power flow
 if false
+    clc;
     [~] = PF(bus,branch,'timing',true);
     [~] = PF(bus,branch,'FD',true,'maxIter',1000,'timing',true);
     [~] = FC_TDPF(bus,branch,'timing',true);

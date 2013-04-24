@@ -8,7 +8,7 @@ clear all; close all; clc
 
 % Case 30
 % IEEE 30 bus test system
-%casename = 'case30';
+casename = 'case30';
 
 % Case 39
 % This test includes a representation of the New England transmission
@@ -21,7 +21,7 @@ clear all; close all; clc
 
 % Case 2736sp
 % Power flow data for Polish system - summer 2004 peak.
-casename = 'case2736sp';
+%casename = 'case2736sp';
 
 %
 % Options:
@@ -29,8 +29,8 @@ casename = 'case2736sp';
 % Only do temperature calcs on the top 5% of lines (by loading)
 tempCalcsMostLoaded = false;
 
-% Initialize TDPF to solved PF
-initTDPFtoPF = true;
+% Initialize TDPF to solved PF - use for larger systems
+initTDPFtoPF = false;
 
 
 %% Import Case Information
