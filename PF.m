@@ -5,8 +5,8 @@
 %   [V,delta,bus,hist] = PF(bus,branch,varargin)
 %
 % INPUTS:
-%	bus =       Bus structure (as returned from makeBusStruct())
-%	branch =    Branch structure (as returned from makeBranchStruct())
+%	bus =       Bus structure (as returned from importCaseData())
+%	branch =    Branch structure (as returned from importCaseData())
 %   varargin =  (Optional) Additional arguments passed as name-value pairs
 %               (see OPTIONAL INPUTS below)
 %
