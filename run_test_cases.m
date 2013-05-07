@@ -161,13 +161,13 @@ lineLoad = hist.lineLoad;
 Vdiff = V1-V2;
 norm(Vdiff,Inf)                         % Absolute
 norm(Vdiff(abs(V1) > eps) ./ ...        % Pct. Relative to conventional PF
-    V1(abs(V1) > eps),Inf)*100              
+    V1(abs(V1) > eps),Inf)*100          
 
 % Max. difference in voltage angle
 ddiff = delta1-delta2;
 norm(ddiff,Inf)                       	% Absolute
 norm(ddiff(abs(delta1) > eps) ./ ...    % Pct. Relative to conventional PF
-    delta1(abs(delta1) > eps),Inf)*100          
+    delta1(abs(delta1) > eps),Inf)*100  
 
 % Max. difference in branch resistance
 Rdiff = branch1.R-branch2.R;
@@ -176,57 +176,16 @@ norm(Rdiff(abs(branch1.R) > eps) ./ ...	% Pct. Relative to conventional PF
     branch1.R(abs(branch1.R) > eps),Inf)*100 
 
 % Compute branch losses
-    % Phasor voltages
-    V1p = V1 .* exp(1j.*delta1.*pi./180);
-    V2p = V2 .* exp(1j.*delta2.*pi./180);
+branch1 = evalBranchLoss(bus1,branch1);
+branch2 = evalBranchLoss(bus2,branch2);
+
+% Extract branch losses
+branchloss1 = real(branch1.S_loss);
+branchloss2 = real(branch2.S_loss);
     
-    % Branch loss vectors
-    branchloss1 = zeros(size(branch1.id));
-    branchloss2 = zeros(size(branch2.id));
-    
-    % Branch losses - conventional PF
-    for ik = 1:length(branch1.id)
-        % Branch indices
-        i = branch1.from(ik);
-        k = branch1.to(ik);
-        
-        % From and To voltages - reflected to branch secondary
-        Vf = V1p(i) / branch1.tap(ik);
-        Vt = V1p(k);
-        
-        % Branch admittance
-        y = 1 / (branch1.R(ik) + 1j*branch1.X(ik));
-        
-        % Loss
-        branchloss1(ik) = real( ...
-            Vf * conj(y * (Vf - Vt)) + ...
-            Vt * conj(y * (Vt - Vf)) ...
-            );
-    end
-    
-    % Branch losses - TDPF
-    for ik = 1:length(branch2.id)
-        % Branch indices
-        i = branch2.from(ik);
-        k = branch2.to(ik);
-        
-        % From and To voltages - reflected to branch secondary
-        Vf = V2p(i) / branch2.tap(ik);
-        Vt = V2p(k);
-        
-        % Branch admittance
-        y = 1 / (branch2.R(ik) + 1j*branch2.X(ik));
-        
-        % Loss
-        branchloss2(ik) = real( ...
-            Vf * conj(y * (Vf - Vt)) + ...
-            Vt * conj(y * (Vt - Vf)) ...
-            );
-    end
-    
-    % Near zero -> zero
-    branchloss1( branchloss1 < 10*eps ) = 0;
-    branchloss2( branchloss2 < 10*eps ) = 0;
+% Near zero -> zero
+branchloss1( branchloss1 < 10*eps ) = 0;
+branchloss2( branchloss2 < 10*eps ) = 0;
 
 % Max. difference in line loss: only for lines loaded above 5%
 ll1 = branchloss1( lineLoad > 0.05 );

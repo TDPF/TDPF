@@ -149,58 +149,17 @@ bus1 = bus; branch1 = branch;
 [V2,d2,T2,bus2,branch2] = FC_TDPF(bus, branch);
 
 % Compute branch losses
-    % Phasor voltages
-    V1p = V1 .* exp(1j.*d1.*pi./180);
-    V2p = V2 .* exp(1j.*d2.*pi./180);
-    
-    % Branch loss vectors
-    branchloss1 = zeros(size(branch1.id));
-    branchloss2 = zeros(size(branch2.id));
-    
-    % Branch losses - conventional PF
-    for ik = 1:length(branch1.id)
-        % Branch indices
-        i = branch1.from(ik);
-        k = branch1.to(ik);
-        
-        % From and To voltages - reflected to branch secondary
-        Vf = V1p(i) / branch1.tap(ik);
-        Vt = V1p(k);
-        
-        % Branch admittance
-        y = 1 / (branch1.R(ik) + 1j*branch1.X(ik));
-        
-        % Loss
-        branchloss1(ik) = real( ...
-            Vf * conj(y * (Vf - Vt)) + ...
-            Vt * conj(y * (Vt - Vf)) ...
-            );
-    end
-    
-    % Branch losses - TDPF
-    for ik = 1:length(branch2.id)
-        % Branch indices
-        i = branch2.from(ik);
-        k = branch2.to(ik);
-        
-        % From and To voltages - reflected to branch secondary
-        Vf = V2p(i) / branch2.tap(ik);
-        Vt = V2p(k);
-        
-        % Branch admittance
-        y = 1 / (branch2.R(ik) + 1j*branch2.X(ik));
-        
-        % Loss
-        branchloss2(ik) = real( ...
-            Vf * conj(y * (Vf - Vt)) + ...
-            Vt * conj(y * (Vt - Vf)) ...
-            );
-    end
-    
-    % Round to 6 decimal places
-    % (This avoids numerical errors in pct. differences)
-    branchloss1 = round( branchloss1 .* 1e6 ) ./ 1e6;
-    branchloss2 = round( branchloss2 .* 1e6 ) ./ 1e6;
+branch1 = evalBranchLoss(bus1,branch1);
+branch2 = evalBranchLoss(bus2,branch2);
+
+% Extract branch losses
+branchloss1 = real(branch1.S_loss);
+branchloss2 = real(branch2.S_loss);
+
+% Round to 6 decimal places
+% (This avoids numerical errors in pct. differences)
+branchloss1 = round( branchloss1 .* 1e6 ) ./ 1e6;
+branchloss2 = round( branchloss2 .* 1e6 ) ./ 1e6;
 
 % Plot branch losses
 plot(branch.id, [branchloss1; branchloss2]);
