@@ -32,6 +32,8 @@
 %               .S_to       Complex power into the branch at the 'to' bus
 %               .S_loss     Complex power loss within the branch
 %                           (S_loss = S_from + S_to)
+%               .loading    Per-unit branch loading (measured at 'from'
+%                           bus)
 %               If updateTemps == TRUE, the the branch fields 'T' and 'R'
 %               may also be modified.
 %
@@ -152,11 +154,16 @@ function branch = evalBranchLoss(bus, branch, varargin)
         end
     end
     
+    %% Compute Loading
+    % Measured at 'from' bus
+    Loading = abs(Sf) ./ branch.rating;
+    
     %% Return
     % Assign data back to branch structure
     branch.S_from = Sf;
     branch.S_to = St;
     branch.S_loss = Sloss;
+    branch.loading = Loading;
 end
 
 
