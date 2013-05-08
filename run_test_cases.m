@@ -10,10 +10,10 @@ clear all; close all; clc
 % Choose one of the MATPOWER test cases below.
 
 % Case 30 - IEEE 30 bus test system
-%casename = 'case30';
+casename = 'case30';
 
 % Case 39 - A small representation of the New England transmission system
-casename = 'case39';
+%casename = 'case39';
 
 % Case 2383wp - Power flow data for Polish system: winter 1999-2000 peak
 %casename = 'case2383wp';
@@ -154,7 +154,7 @@ end
     PF(bus, branch, 'history', true, 'lineLoad', true);
 lineLoad = hist.lineLoad;
 
-[V2, delta2, T2, bus2, branch2] = ...
+[V2, delta2, ~, bus2, branch2] = ...
     FC_TDPF(bus, branch);
 
 % Max. difference in voltage magnitude
@@ -204,6 +204,47 @@ abs((sysloss1 - sysloss2)/sysloss1)*100 % Pct. Relative to conventional PF
 [~, ii] = sort(lineLoad(lineLoad > 0.05));
 lldiffrel = (ll2 - ll1)./(ll1);
 plot( lldiffrel(ii) );
+
+%% Detailed Analysis of Branch Losses
+% Compute results for PF vs. TDPF (using FC_TDPF)
+[V1, delta1, bus1, branch1] = PF(bus, branch);
+[V2, delta2, T2, bus2, branch2] = FC_TDPF(bus, branch);
+
+% Compute branch losses
+branch1 = evalBranchLoss(bus1,branch1);
+branch2 = evalBranchLoss(bus2,branch2);
+
+% Round to help avoid errors with percentage computations
+branch1.S_loss = round(branch1.S_loss ./ sqrt(eps)) .* sqrt(eps);
+branch2.S_loss = round(branch2.S_loss ./ sqrt(eps)) .* sqrt(eps);
+
+% Compute relative differences
+diff = struct();
+diff.R = (branch2.R - branch1.R) ./ branch1.R;
+diff.loss = real(branch2.S_loss - branch1.S_loss) ./ real(branch1.S_loss);
+
+% Export to CSV
+    % Column labels
+    delim = ',';
+    lab = ['from', delim, 'to', ...
+        delim, 'loading_TDPF',  delim, 'pctloading_TDPF', ...
+        delim, 'R_PF',  delim, 'R_TDPF', delim, 'R_diff', ...
+        delim, 'PLoss_PF',  delim, 'PLoss_TDPF', delim, 'PLoss_diff' ];
+
+    % Output values
+    out = [branch1.from; branch1.to; ...
+        abs(branch2.S_from); branch2.loading; ...
+        branch1.R; branch2.R; diff.R; ...
+        real(branch1.S_loss); real(branch2.S_loss); diff.loss];
+    out = transpose(out);
+
+    % Write output
+    fname = [casename '_branch_details.csv'];
+    fileID = fopen(fname,'w+');                             % Labels
+    fprintf(fileID,'%s\n',lab);
+    fclose(fileID);
+    dlmwrite(fname, out, 'delimiter', delim, '-append');	% Values
+
 
 %% Timings
 % Select number of runs
@@ -279,9 +320,4 @@ if tempCalcsMostLoaded,
     disp('(Only top 5% of most loaded lines calculated)');
 end
 disp(compTable)
-
-
-
-
-
 
