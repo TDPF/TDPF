@@ -6,7 +6,9 @@ Copyright &copy; 2013  Stephen Frank, Jason Sexauer, and Salman Mohagheghi
 ## What Is TDPF? ##
 TDPF is a proof-of-concept Temperature-Dependent Power Flow algorithm implemented as a collection of MATLAB scripts. TDPF augments conventional power flow by integrating an estimate of branch temperatures with the conventional power flow equations. For the technical details, please read:
 
-1.	S. Frank, J. Sexauer, and S. Mohagheghi, "Temperature-dependent power flow," 2013, submitted for publication. Available: [http://files.stevefrank.info/pub/TDPF.pdf](http://files.stevefrank.info/pub/TDPF.pdf "Temperature-Dependent Power Flow by S. Frank, J. Sexauer, and S. Mohagheghi").
+1.	S. Frank, J. Sexauer, and S. Mohagheghi, "Temperature-dependent power flow," *IEEE Transactions on Power Systems*, 2013, to be published. Available: [http://dx.doi.org/10.1109/TPWRS.2013.2266409 "Temperature-Dependent Power Flow by S. Frank, J. Sexauer, and S. Mohagheghi").
+
+For those without access to an *IEEE Transactions on Power Systems subscription*, a pre-publication manuscript of the paper is available [here](http://files.stevefrank.info/pub/TDPF.pdf "Temperature-Dependent Power Flow by S. Frank, J. Sexauer, and S. Mohagheghi (Authors' manuscript)").
 
 ## How To Use TDPF ##
 TDPF is implemented as a collection of MATLAB functions:
