@@ -13,7 +13,7 @@ power flow equations. For the technical details, please read:
 	
 For those without access to an IEEE Transactions on Power Systems subscription,
 a pre-publication manuscript of the paper is available from:
-http://files.stevefrank.info/pub/TDPF.pdf
+http://files.stevefrank.info/pub/FrSeMo2013.pdf
 
 # How To Use TDPF 
 TDPF is implemented as a collection of MATLAB functions:
