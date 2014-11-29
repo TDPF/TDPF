@@ -1,5 +1,5 @@
 # TDPF #
-**T**emperature- **D**ependent **P**ower **F**low implemented in MATLAB
+Temperature-Dependent Power Flow implemented in MATLAB
 
 Copyright &copy; 2013  Stephen Frank, Jason Sexauer, and Salman Mohagheghi
 
