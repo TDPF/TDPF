@@ -8,8 +8,8 @@ flow by integrating an estimate of branch temperatures with the conventional
 power flow equations. For the technical details, please read:
 
 	S. Frank, J. Sexauer, and S. Mohagheghi, "Temperature-dependent power flow,"
-	IEEE Transactions on Power Systems, 2013, to be published. Available:
-	http://dx.doi.org/10.1109/TPWRS.2013.2266409 
+	IEEE Transactions on Power Systems, vol. 28, no. 4, pp. 4007--4018, 2013.
+	Available: http://dx.doi.org/10.1109/TPWRS.2013.2266409 
 	
 For those without access to an IEEE Transactions on Power Systems subscription,
 a pre-publication manuscript of the paper is available from:
